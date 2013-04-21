@@ -72,16 +72,22 @@ class NREPLSession:
 		self._channel.submit(data, self)
 
 
-class FakeChannel(Channel):
-	"""used in unit testing"""
 
-	def __init__(self, cb):
-		"""cb is invoked with the params of Channel.submit"""
+class FakeListChannel(Channel):
+	"""Channel that responds with a list of responses that are passed in as ctor arg"""
 
-		self._cb = cb
+	def __init__(self, responses):
+		self._responses = list(responses)
+		self._responses.reverse()
 
 	def submit(self, data, session):
-		self._cb(data, session)
+		if len(self._responses) == 0:
+			raise Exception('not enough data')
+
+		nextData = self._responses.pop()
+		for d in nextData:
+			d['id'] = data['id']
+			session.resultsReceived(d)
 
 
 class NREPLSessionTests(unittest.TestCase):
@@ -90,23 +96,18 @@ class NREPLSessionTests(unittest.TestCase):
 		receives the result and removes the callbacks when status 'done'
 		is received'''
 
-		responses = []
-
 		# fake responses in reverse order
 		cbResponses = [
-			{"value": "6"},
-			{"value": "7"},
-			{"status": ["done"]}
+			[
+				{"value": "6"},
+				{"value": "7"},
+				{"status": ["done"]}
+			]
 		]
-
-		def channelCb(data, session):
-			theId = data['id']
-			for d in cbResponses:
-				d['id'] = theId
-				session.resultsReceived(d)
-
-		channel = FakeChannel(channelCb) 
+		channel = FakeListChannel(cbResponses)
 		session = NREPLSession(channel, "1", (str(i) for i in range(100)))
+
+		responses = []
 		session.eval("(+ 3 4)", lambda v: responses.append(v))
 
 		self.assertEquals(2, len(responses))
