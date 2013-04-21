@@ -28,26 +28,34 @@ class NREPLSession:
 		self._sessionId = sessionId
 		self._idGenerator = idGenerator
 
-		self._callbacks = {}
+		self._idBasedCallbacks = {}
+		self._closeCb = None
+		self._sessionClosing = False
 
+	
 	def resultsReceived(self, data):
 		"""Called by the channel when data is received that belongs to this session"""
 
-		logger.debug("Raw resultsReceived: {0}".format(data))
-		
-		dataId = data["id"]
-
-		if not dataId in self._callbacks:
-			return
-		
-		cb = self._callbacks[dataId]
+		logger.debug("Raw results: {0}".format(data))
 
 		status = data["status"] if "status" in data else []
 
-		if "done" in status:
-			self._callbacks.pop(dataId)
+		if "id" in data:
+			dataId = data["id"]
+			cb = self._idBasedCallbacks[dataId] if dataId in self._idBasedCallbacks else None
+			if "done" in status:
+				self._idBasedCallbacks.pop(dataId)
+			if cb != None:
+				cb(data)
 
-		cb(data)
+		if "session-closed" in status:
+			logger.debug("Received session-closed status")
+			self._sessionClosing = True
+
+		if self._sessionClosing and len(self._idBasedCallbacks) == 0 and self._closeCb != None:
+			logger.debug("Calling close callback function")
+			self._closeCb()
+
 
 
 	def eval(self, lispCode, cb):
@@ -68,9 +76,19 @@ class NREPLSession:
 			if 'value' in receivedData:
 				cb(receivedData['value'])
 
-		self._callbacks[data["id"]] = interCb
+		self._idBasedCallbacks[data["id"]] = interCb
 		self._channel.submit(data, self)
 
+	def close(self, closeCb):
+		"""closes a session, calls closeCb when complete"""
+		data = {
+			"op": "close",
+			"session": self._sessionId,
+			"id": self._idGenerator.next()
+		}
+
+		self._closeCb = closeCb
+		self._channel.submit(data, self)
 
 
 class FakeListChannel(Channel):
@@ -80,14 +98,17 @@ class FakeListChannel(Channel):
 		self._responses = list(responses)
 		self._responses.reverse()
 
-	def submit(self, data, session):
+	def processResult(self, session):
 		if len(self._responses) == 0:
 			raise Exception('not enough data')
 
 		nextData = self._responses.pop()
 		for d in nextData:
-			d['id'] = data['id']
 			session.resultsReceived(d)
+
+
+	def submit(self, data, session):
+		self.processResult(session)
 
 
 class NREPLSessionTests(unittest.TestCase):
@@ -99,9 +120,9 @@ class NREPLSessionTests(unittest.TestCase):
 		# fake responses in reverse order
 		cbResponses = [
 			[
-				{"value": "6"},
-				{"value": "7"},
-				{"status": ["done"]}
+				{"value": "6", "id": "0"},
+				{"value": "7", "id": "0"},
+				{"status": ["done"], "id": "0"}
 			]
 		]
 		channel = FakeListChannel(cbResponses)
@@ -113,8 +134,41 @@ class NREPLSessionTests(unittest.TestCase):
 		self.assertEquals(2, len(responses))
 		self.assertEquals("6", responses[0])
 		self.assertEquals("7", responses[1])
-		self.assertEquals(0, len(session._callbacks))
+		self.assertEquals(0, len(session._idBasedCallbacks))
 
+	def test_closing(self):
+		'''This tests that when a close is requested the close callbock will get fired'''
+
+		cbResponses = [
+			[],
+			[],
+			[
+				{"status": ["session-closed"]},
+				{"value": "7", "id": "0"},
+				{"status": ["done"], "id": "0"}
+			]
+		]
+
+		channel = FakeListChannel(cbResponses)
+		session = NREPLSession(channel, "2", (str(i) for i in range(100)))
+
+		def receivedValue(data):
+			logger.debug("got data for request: {0}".format(data))
+			receivedValue.received = True
+		receivedValue.received = False
+
+		session.eval("(+ 3 4)", receivedValue)
+
+		def setClosed():
+			logger.debug("Received session closed callback")
+			setClosed.closed = True
+		setClosed.closed = False
+		session.close(setClosed)
+
+		channel.processResult(session)
+
+		self.assertEquals(True, setClosed.closed)
+		self.assertEquals(True, receivedValue.received)
 
 
 if __name__ == '__main__':
