@@ -18,7 +18,28 @@ class Channel:
 
 		raise NotImplementedError()
 
+class InterruptStatus:
+	INTERRUPTED=1
+	SESSION_IDLE=2
+	INTERRUPT_ID_MISMATCH=3
+
+	@staticmethod
+	def has_string(s):
+		return s in InterruptStatus._dict
+
+	@staticmethod
+	def from_string(s):
+		return InterruptStatus._dict[s]
+
+InterruptStatus._dict = {
+			"interrupted": InterruptStatus.INTERRUPTED,
+			"session-idle": InterruptStatus.SESSION_IDLE,
+			"interrupt-id-mismatch": InterruptStatus.INTERRUPT_ID_MISMATCH
+		}
+
 class NREPLSession:
+
+
 	def __init__(self, channel, sessionId, idGenerator):
 		"""channel => instance implementing Channel
 		sessionId => a unique id associated with this session, probably assigned by the nrepl
@@ -81,6 +102,7 @@ class NREPLSession:
 
 	def close(self, closeCb):
 		"""closes a session, calls closeCb when complete"""
+
 		data = {
 			"op": "close",
 			"session": self._sessionId,
@@ -88,6 +110,37 @@ class NREPLSession:
 		}
 
 		self._closeCb = closeCb
+		self._channel.submit(data, self)
+
+	def describe(self, dataCb):
+		pass
+
+	def interrupt(self, statusCb, interrupt_id=None):
+		'''Interrupts a running request on the nrepl bound with the current session. Calls back 
+		with the result of the operation, which will be an int corresponding to one of the values in InterruptStatus
+		class.'''
+
+		data = {
+			"op": "interrupt",
+			"session": self._sessionId,
+			"id": self._idGenerator.next()
+		}
+
+		if interrupt_id != None:
+			data["interrupt-id"] = interrupt_id
+
+		logger.debug("Sending interrupt {0}".format(data))
+
+		def dataCb(rdata):
+			logger.debug("Received interrupt {0}".format(rdata))
+			for s in rdata['status']:
+				if InterruptStatus.has_string(s):
+					statusCb(InterruptStatus.from_string(s))
+					break
+
+
+		self._idBasedCallbacks[data["id"]] = dataCb
+
 		self._channel.submit(data, self)
 
 	def clone(self, newSessionCb):
@@ -120,6 +173,7 @@ class FakeListChannel(Channel):
 			raise Exception('not enough data')
 
 		nextData = self._responses.pop()
+		logger.debug("FaketListChannel: nextData = {0}".format(nextData))
 		for d in nextData:
 			session.resultsReceived(d)
 
@@ -173,6 +227,30 @@ class NREPLSessionTests(unittest.TestCase):
 		session.clone(accept_clone)
 		self.assertTrue(accept_clone.called)
 
+
+	def test_interrupt(self):
+
+		cbResponses = [
+			[{"id": "1", "status": ["interrupted"]}],
+			[{"id": "2", "status": ["session-idle"]}],
+			[{"id": "3", "status": ["interrupt-id-mismatch"]}]
+		]
+
+		channel = FakeListChannel(cbResponses)
+		session = NREPLSession(channel, '2', (str(i) for i in itertools.count(1)))
+
+		statusii = iter([InterruptStatus.INTERRUPTED, InterruptStatus.SESSION_IDLE, InterruptStatus.INTERRUPT_ID_MISMATCH])
+
+		def received(i):
+			self.assertEquals(statusii.next(), i)
+			received.called = received.called + 1
+		received.called = 0
+
+		session.interrupt(received)
+		session.interrupt(received)
+		session.interrupt(received)
+
+		self.assertEquals(3, received.called)
 
 
 	def test_closing(self):
