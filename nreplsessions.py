@@ -3,7 +3,7 @@
 to the repl given an abstract idea of how to communicate 
 with such a NREPL"""
 
-import unittest, logging
+import unittest, logging, itertools
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +90,23 @@ class NREPLSession:
 		self._closeCb = closeCb
 		self._channel.submit(data, self)
 
+	def clone(self, newSessionCb):
+		'''clones a session, calls newSessionCb with a new session instance'''
+		data = {
+			"op": "clone",
+			"session": self._sessionId,
+			"id": self._idGenerator.next()
+		}
+
+		def dataReceivedCb(data):
+			logger.debug('clone received data: {0}'.format(data))
+			newSessionCb(NREPLSession(self._channel, data['new-session'], self._idGenerator))
+
+		logger.debug("received request to clone session '{0}'".format(self._sessionId))
+
+		self._idBasedCallbacks[data['id']] = dataReceivedCb
+		self._channel.submit(data, self)
+
 
 class FakeListChannel(Channel):
 	"""Channel that responds with a list of responses that are passed in as ctor arg"""
@@ -112,6 +129,7 @@ class FakeListChannel(Channel):
 
 
 class NREPLSessionTests(unittest.TestCase):
+
 	def test_happy_cases(self):
 		'''This tests that when a simple command is sent, it successfully 
 		receives the result and removes the callbacks when status 'done'
@@ -135,6 +153,27 @@ class NREPLSessionTests(unittest.TestCase):
 		self.assertEquals("6", responses[0])
 		self.assertEquals("7", responses[1])
 		self.assertEquals(0, len(session._idBasedCallbacks))
+
+	def test_clone(self):
+		'''this tests that a session can clone itself'''
+		cbResponses = [
+			[
+				{"id": '1', "session": "1", "new-session": "2"}
+			]
+		]
+
+		channel = FakeListChannel(cbResponses)
+		session = NREPLSession(channel, '1', (str(i) for i in itertools.count(1)))
+
+		def accept_clone(clonedSession):
+			self.assertEquals('2', clonedSession._sessionId)
+			accept_clone.called = True
+		accept_clone.called = False
+
+		session.clone(accept_clone)
+		self.assertTrue(accept_clone.called)
+
+
 
 	def test_closing(self):
 		'''This tests that when a close is requested the close callbock will get fired'''
