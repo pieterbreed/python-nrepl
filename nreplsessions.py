@@ -160,6 +160,31 @@ class NREPLSession:
 		self._idBasedCallbacks[data['id']] = dataReceivedCb
 		self._channel.submit(data, self)
 
+	def loadFile(self, fileContents, loadFileCb, fileName=None, filePath=None):
+		'''loads the contents of a file into the session. optionally associates this
+		with a name for the file and a relative path'''
+
+		data = {
+			"op": "load-file",
+			"file": fileContents,
+			"session": self._sessionId,
+			"id": self._idGenerator.next()
+		}
+
+		if fileName != None:
+			data['file-name'] = fileName
+
+		if filePath != None:
+			data['file-path'] = filePath
+
+		logger.debug("request to load file '{0}'".format(data))
+
+		def dataReceivedCb(data):
+			loadFileCb()
+
+		self._idBasedCallbacks[data['id']] = dataReceivedCb
+		self._channel.submit(data, self)
+
 
 class FakeListChannel(Channel):
 	"""Channel that responds with a list of responses that are passed in as ctor arg"""
@@ -183,6 +208,23 @@ class FakeListChannel(Channel):
 
 
 class NREPLSessionTests(unittest.TestCase):
+
+	def test_LoadFile(self):
+		session = NREPLSession(FakeListChannel([
+				[
+					{"id": "0"}
+				]
+				]),
+			"1",
+			(str(i) for i in range(100)))
+
+		def called():
+			called.called = True
+		called.called = False
+
+		session.loadFile("this is the contents", called, "filename", "filepath")
+
+		self.assertTrue(called.called)
 
 	def test_happy_cases(self):
 		'''This tests that when a simple command is sent, it successfully 
