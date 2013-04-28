@@ -3,20 +3,10 @@
 to the repl given an abstract idea of how to communicate 
 with such a NREPL"""
 
+from channel import Channel 
 import unittest, logging, itertools
 
 logger = logging.getLogger(__name__)
-
-class Channel:
-	def submit(self, data, session):
-		"""Submits data to the channel.
-
-		data => Standard python data structure, but probably a map.
-		        An id will be assigned to this structure if it's not present
-		session => A session object that will be called back with the result"""
-
-
-		raise NotImplementedError()
 
 class InterruptStatus:
 	INTERRUPTED=1
