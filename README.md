@@ -12,8 +12,8 @@ interact with a clojure nrepl.
 The ultimate goal for this is to be a plugin in Sublime Text 2 (and maybe 3) because you
 know, emacs sucks. (yes, I said it)
 
-Pieter
-github.com@pb.co.za
+Pieter<br/>
+github.com@pb.co.za<br/>
 21 April 2013
 
 I am accepting donations for this project via PayPal. The proceeds come to me and allows me to 
