@@ -185,6 +185,28 @@ class NREPLSession:
 		self._idBasedCallbacks[data['id']] = dataReceivedCb
 		self._channel.submit(data, self)
 
+	def loadStdIn(self, contents, needInputCb):
+		'''adds the contents of 'contents' to stdin on the nrepl session.
+		needInputCb will be called if more data is required to satisfy a read
+		operation on the session'''
+
+		data = {
+			"op": "stdin",
+			"stdin": contents,
+			"session": self._sessionId,
+			"id": self._idGenerator.next()
+		}
+
+		logger.debug("request to add contents to stdin")
+
+		def callback(data):
+			logger.debug("callback for stdin '{0}'".format(data))
+			if 'status' in data and 'need-input' in data['status']:
+				needInputCb()
+
+		self._idBasedCallbacks[data['id']] = callback
+		self._channel.submit(data, self)
+
 
 class FakeListChannel(Channel):
 	"""Channel that responds with a list of responses that are passed in as ctor arg"""
