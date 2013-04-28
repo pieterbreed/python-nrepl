@@ -34,7 +34,7 @@ class Transport(object):
 
 		raise NotImplementedError()
 
-	def _receveidData(self, data):
+	def _receivedData(self, data):
 		'''invoked when a full python data structure can be assembled from 
 		the received bytes. Meant for invoking privately'''
 

@@ -31,7 +31,7 @@ class BCodeTransport(Transport):
 
 		self._sender(bcode.bencode(data))
 
-	def received(self, raw):
+	def receive(self, raw):
 		'''receives raw data and determines when to invoke the callback when
 		enough data has been received.
 
@@ -41,7 +41,7 @@ class BCodeTransport(Transport):
 
 class BCodeTransportUnitTests(unittest.TestCase):
 	def test_sends(self):
-		logger = logging.getLogger("{0}:BcodeTransportUnitTest".format(__name__))
+		logger = logging.getLogger("{0}:BcodeTransportUnitTest:test_sends".format(__name__))
 
 		def sendBytes(bs):
 			logger.debug("sendBytes: {0}".format(bs))
@@ -57,6 +57,32 @@ class BCodeTransportUnitTests(unittest.TestCase):
 		t.send(['1','2','3','4'])
 
 		self.assertEquals(0, len(receivedData.data))
+		self.assertEquals(bcode.bencode(4), sendBytes.received[0])
+		self.assertEquals(bcode.bencode(['1','2','3','4']), sendBytes.received[1])
+
+	def test_receives(self):
+		logger = logging.getLogger("{0}:BcodeTransportUnitTest:test_receives".format(__name__))
+
+		def sendBytes(bs):
+			logger.debug("sendBytes: {0}".format(bs))
+			sendBytes.received.append(bs)
+		sendBytes.received = []
+
+		def receivedData(data):
+			receivedData.data.append(data)
+		receivedData.data = []
+
+		t = BCodeTransport(sendBytes, receivedData)
+		t.receive('12:aoeuaoeuaoeu')
+		t.receive('12:aoeua')
+		t.receive('oeuaoeu')
+
+		self.assertEquals(0, len(sendBytes.received))
+
+		self.assertEquals(2, len(receivedData.data))
+		self.assertEquals('aoeuaoeuaoeu', receivedData.data[0])
+		self.assertEquals('aoeuaoeuaoeu', receivedData.data[1])
+
 
 if __name__ == '__main__':
 	logging.basicConfig(level=logging.DEBUG)
