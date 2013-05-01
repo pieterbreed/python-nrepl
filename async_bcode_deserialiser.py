@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
-# class to interpret unknown lengths of bencoded strings
-# keeps remnants around until more data is received
+'''class to interpret unknown lengths of bencoded strings
+keeps remnants around until more data is received'''
 
 import bcode
 import unittest

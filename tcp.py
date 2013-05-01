@@ -1,17 +1,4 @@
-#! /usr/bin/env python
-# base interface for channel
-
-import socket, Queue
-
-class Channel(object):
-	def submit(self, data, session):
-		"""Submits data to the channel.
-
-		data => Standard python data structure, but probably a map.
-		session => A session object that will be called back with the result"""
-
-
-		raise NotImplementedError()
+# /usr/bin/env python
 
 TCP_CHANNEL_TIMEOUT = 1 # seconds, float value
 TCP_READ_BUFFER_SIZE = 4098
@@ -91,17 +78,15 @@ def socketThreadMain(host, port, sendQueue, receiveQueue, stoppedEvent):
 	s.close()
 	stoppedEvent.set()
 
-class TcpChannel(Channel):
-	'''provides a channel over a tcp/ip connection'''
+class Tcp:
+	'''provides an abstraction over a tcp/ip connection'''
 
-	def __init__(self, host, port, receivedDataCb):
+	def __init__(self, host, port):
 		'''creates a new TcpChannel which can send and receive data
 		to and from a tcp/ip socket.
 
 		host => the hostname or address to connect to
-		port => the port number to connect to on host
-		receivedDataCb => a callback that will be called with one argument,
-			the received data, on the same thread as processReceives are called'''
+		port => the port number to connect to on host'''
 
 		self._socketSendQueue = Queue.Queue()
 		self._socketReceiveQueue§ = Queue.Queue()
@@ -109,7 +94,6 @@ class TcpChannel(Channel):
 		self._stoppedEvent.clear()
 		thread.start_new_thread(socketThreadMain, host, port, self._socketSendQueue, self._socketReceiveQueue, self._stoppedEvent)
 
-		self._cb = receivedDataCb
 		self._processReceivesLock = thread.Lock()
 
 	def stop(self):
@@ -129,10 +113,9 @@ class TcpChannel(Channel):
 				'contents': data
 			})
 
-	def processReceives(self):
+	def receive(self):
 		'''this is a synchronized method (can only be called on one thread at a time) and reads 
-		everything from the sockets received queue and calls the callback on the same thread
-		as this method was called from'''
+		everything from the sockets received queue and returns it to the caller'''
 		self._processReceivesLock.acquire()
 		received = ''
 		while !self._socketReceiveQueue.empty():
@@ -141,19 +124,5 @@ class TcpChannel(Channel):
 			except Queue.Empty:
 				pass
 		self._processReceivesLock.release()
-		self._cb(received)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+		return received
 
