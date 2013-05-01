@@ -4,7 +4,7 @@
 '''implements an NREPL transport using beencoding'''
 
 from async_bcode_deserialiser import AsyncBCodeDeserialiser
-from channel import Transport
+from transport import Transport
 
 import bcode, unittest, logging
 
