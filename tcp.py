@@ -1,6 +1,6 @@
 # /usr/bin/env python
 
-import unittest, thread
+import unittest, threading
 
 TCP_CHANNEL_TIMEOUT = 1 # seconds, float value
 TCP_READ_BUFFER_SIZE = 4098
@@ -95,7 +95,7 @@ class Tcp:
 		port => the port number to connect to on host'''
 
 		self._socketSendQueue = Queue.Queue()
-		self._socketReceiveQueue§ = Queue.Queue()
+		self._socketReceiveQueue = Queue.Queue()
 		self._stoppedEvent = thread.Event()
 		self._stoppedEvent.clear()
 		thread.start_new_thread(socketThreadMain, host, port, self._socketSendQueue, self._socketReceiveQueue, self._stoppedEvent)
@@ -174,19 +174,19 @@ class MockQueue:
 		allow = self._putsAllows.pop()
 		if allow:
 			self._puts.append(received)
-		else
+		else:
 			raise Queue.Full
 
 
 class TcpTests(unittest.TestCase):
-	def test_thread_read_1():
+	def test_thread_read_1(self):
 		socketReceives = ['aoeu']
 		socket = MockSocket(socketReceives)
 
 		sendQueue = MockQueue([False, {'type': 'control', 'op': 'stop'}], None)
 		receiveQueue = MockQueue(None, [True])
 		
-		stoppedEvent = thread.Event()
+		stoppedEvent = threading.Event()
 
 		socketThreadMain(socket, sendQueue, receiveQueue, stoppedEvent)
 
@@ -195,7 +195,8 @@ class TcpTests(unittest.TestCase):
 
 
 
-
+if __name__ == '__main__':
+	unittest.main()
 
 
 
