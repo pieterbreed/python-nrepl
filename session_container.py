@@ -6,7 +6,69 @@ import socket, Queue
 class SessionContainer(object):
 	'''a nrepl-aware container for logic dealing with nrepl sessions.
 
-	probably requires some kind of transport for doing the actual communication'''
+	this presents a callback-based api for interacting with nrepl'''
+
+	def __init__(self, sender, idGenerator):
+		'''creates a session container
+
+		sender => a function of one param that accepts python data for sending via the transport
+		idGenerator => an iterator that creates unique strings used for identifying nrepl instructions'''
+
+		self._sender = sender
+		self._idGen = idGenerator
+
+		self._newSessionCallbacks = {}
+		self._sessions = {}
+
+	def createNewSession(self, newSessionCb):
+		'''creates a new session and returns it with the callback method
+
+		newSessionCb => a function of 1 param taking an instance of NREPLSession'''
+
+		newSessionsId = self._idGen.next()
+		self._newSessionCallbacks[newSessionsId] = newSessionCb
+
+		data = {
+			'op': 'clone',
+			'id': newSessionsId
+		}
+
+		self._sender(data)
+
+	def handleNewSessionResponse(self, data, callback):
+		'''called when data is received that is a result of requesting a new session'''
+
+		if not 'new-session' in data:
+			raise ValueErrro('data must contain new-session')
+
+		newSessionId = data['new-session']
+		newSession = NREPLSession(self, newSessionId, self._idGen)
+		callback(newSession)
+
+
+	def acceptData(self, data):
+		'''accepts python data straight from the transport
+
+		data => python data structure'''
+
+		if not 'id' in data:
+			raise ValueError('data does not contain an "id" field')
+
+		id_ = data['id']
+
+		if id_ in self._newSessionCallbacks:
+			handleNewSessionResponse(data, self._newSessionCallbacks.pop(id_))
+		else:
+			if not 'session' in data:
+				raise ValueError('data must contain session, data = {0}'.format(data))
+
+			sessionId = data['session']
+
+			if not sessionId in self._sessions:
+				raise ValueError('receiving data for an unregistered session, data = {0}'.format(data))
+
+			self._sessions[sessionId].resultsReceived(data)
+
 
 	def submit(self, data, session):
 		"""Submits data to the channel. 
@@ -14,6 +76,16 @@ class SessionContainer(object):
 		data => Standard python data structure, but probably a map.
 		session => A session object that will be called back with the result"""
 
+		if not 'session' in data:
+			raise ValueError('data must contain session')
 
-		raise NotImplementedError()
+		sessionId = data['session']
+
+		if sessionId != session._sessionId:
+			raise ValueError('request for submitting data to session with the wrong session callback') 
+
+		if not sessionId in self._sessions:
+			self._sessions[sessionId] = session
+
+		self._sender(data)
 

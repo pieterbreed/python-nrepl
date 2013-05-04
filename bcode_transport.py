@@ -18,12 +18,8 @@ class BCodeTransport(Transport):
 		sendBytes => method of one param, taking a byte[] which is used to send bytes
 		receivedDataCb => method of one param, taking any python data when data is received'''
 
-		def cb(d):
-			super(BCodeTransport, self)._receivedData(d)
-
-		super(BCodeTransport, self).__init__(receivedDataCb)
 		self._bcode = AsyncBCodeDeserialiser()
-		self._bcode.register_cb(cb)
+		self._bcode.register_cb(receivedDataCb)
 		self._sender = sendBytes
 
 	def send(self, data):
@@ -32,7 +28,7 @@ class BCodeTransport(Transport):
 		self._sender(bcode.bencode(data))
 
 	def receive(self, raw):
-		'''receives raw data and determines when to invoke the callback when
+		'''accepts raw data and determines when to invoke the callback when
 		enough data has been received.
 
 		raw => byte array'''

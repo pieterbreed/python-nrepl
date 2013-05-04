@@ -45,7 +45,7 @@ def socketThreadMain(isocket, sendQueue, receiveQueue, stoppedEvent):
 		while hasStuffToSend:
 			try:
 				stuffToSend = sendQueue.get_nowait() # raises Queue.Empty if there is nothing to read
-				logger.debug("found an instruction on the sendQueue~ '{0}'".format(
+				logger.debug("found an instruction on the sendQueue '{0}'".format(
 					stuffToSend))
 
 				if stuffToSend['type'] == 'control':
@@ -114,10 +114,7 @@ class Tcp:
 		self._socketSendQueue = Queue.Queue()
 		self._socketReceiveQueue = Queue.Queue()
 		self._stoppedEvent = thread.Event()
-		self._stoppedEvent.clear()
 		thread.start_new_thread(socketThreadMain, host, port, self._socketSendQueue, self._socketReceiveQueue, self._stoppedEvent)
-
-		self._processReceivesLock = thread.Lock()
 
 	def stop(self):
 		'''stops the tcp thread and the socket and waits for it to clean itself up'''
@@ -137,16 +134,13 @@ class Tcp:
 			})
 
 	def receive(self):
-		'''this is a synchronized method (can only be called on one thread at a time) and reads 
-		everything from the sockets received queue and returns it to the caller'''
-		self._processReceivesLock.acquire()
+		'''returns everything that has been received so far. This method is not thread-safe'''
 		received = ''
 		while not self._socketReceiveQueue.empty():
 			try:
 				received = received + self._socketReceiveQueue.qet_nowait()
 			except Queue.Empty:
 				pass
-		self._processReceivesLock.release()
 		return received
 
 mockLogger = logging.getLogger(__name__ + 'mocks')
@@ -238,6 +232,7 @@ class TcpTests(unittest.TestCase):
 		self.assertTrue(stoppedEvent.is_set())
 		self.assertEquals('1234', receiveQueue._puts.pop())
 		self.assertEquals(1, len(socket._sends))
+		self.assertEquals('aoeu', socket._sends[0])
 
 
 

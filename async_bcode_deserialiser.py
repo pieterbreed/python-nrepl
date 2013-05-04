@@ -19,6 +19,9 @@ class AsyncBCodeDeserialiser:
 
 
     def push_data(this, strData):
+        '''Use this method to add more data to the internal buffer. When the buffer
+        has enough data in it to deserialize into a complete python data structure
+        then the callback will be invoked with that data'''
         this._buffer = this._buffer + strData
         this._perform_data_stitching()
 
