@@ -1,15 +1,15 @@
 # /usr/bin/env python
 
-import unittest, threading
+import unittest, threading, logging, Queue, socket
 
 TCP_CHANNEL_TIMEOUT = 1 # seconds, float value
 TCP_READ_BUFFER_SIZE = 4098
 
-def socketThreadMain(socket, sendQueue, receiveQueue, stoppedEvent):
+def socketThreadMain(isocket, sendQueue, receiveQueue, stoppedEvent):
 	'''this method will perform the communications with a socket-like object
 	and perform sending and receiving of data via the passed Queues.
 
-	socket => an object supporting send(byte[]) : int, recv(int) : byte[] & close()
+	isocket => an object supporting send(byte[]) : int, recv(int) : byte[] & close()
 
 	sendQueue => a Queue object with which this thread is controlled
 
@@ -22,17 +22,19 @@ def socketThreadMain(socket, sendQueue, receiveQueue, stoppedEvent):
 		"op": "stop" # only one supported
 	}
 
-	Messaging message, instructs the thread to send a message on the socket:
+	Messaging message, instructs the thread to send a message on the isocket:
 	{
 		"type": "message",
 		"contents": string/bytes to be sent
 	}
 
-	receiveQueue => a queue containing raw bytes/string read from the socket
+	receiveQueue => a queue containing raw bytes/string read from the isocket
 
 	stoppedEvent => an Event that signals when the thread has terminated
 
 	'''
+
+	logger = logging.getLogger(__name__ + 'socketThreadMain')
 
 	mustStop = False
 	received = ''
@@ -43,31 +45,45 @@ def socketThreadMain(socket, sendQueue, receiveQueue, stoppedEvent):
 		while hasStuffToSend:
 			try:
 				stuffToSend = sendQueue.get_nowait() # raises Queue.Empty if there is nothing to read
+				logger.debug("found an instruction on the sendQueue~ '{0}'".format(
+					stuffToSend))
 
 				if stuffToSend['type'] == 'control':
 					if stuffToSend['op'] == 'stop':
+						logger.debug("received signal to stop the thread")
 						mustStop = True
 						break
-				elif stufftoSend['type'] == 'message':
-					messageContents = stufftoSend['contens']
+				elif stuffToSend['type'] == 'message':
+					messageContents = stuffToSend['contents']
+					logger.debug(
+						"Received something to send on the socket: '{0}'".format(
+							messageContents))
 					while len(messageContents) > 0:
-						sent = socket.send(messageContents)
+						sent = isocket.send(messageContents)
 						messageContents = messageContents[sent:]
 			except Queue.Empty, e:
+				logger.debug("nothing to send atm")
 				hasStuffToSend = False
 
 		# if we don't have anything else to send
 		# and we did not get a request to stop then 
 		# lets try reading for a while
+		received = ''
 		if not mustStop:
 			moreToRead = True
-			# try to read everything from the socket
+			# try to read everything from the isocket
 			# that we can read now without waiting to long for
 			while moreToRead:
 				try:
-					received = received + socket.recv(TCP_READ_BUFFER_SIZE)
+					received = received + isocket.recv(TCP_READ_BUFFER_SIZE)
+					logger.debug("Have something from the socket: '{0}'".format(
+						received))
 				except socket.timeout:
+					logger.debug("isocket timed out waiting for incoming bytes")
 					moreToRead = False
+
+			if len(received) == 0:
+				continue
 
 			# we've received everything that we can right now
 			# let's try sending it back
@@ -78,10 +94,11 @@ def socketThreadMain(socket, sendQueue, receiveQueue, stoppedEvent):
 				# we can't send it back right now because the queue is full
 				# we're not doing anything with this
 				# since we can just put it next time round
+				logger.debug("Can't place the received contents on the out queue because it's full")
 				pass
 
-
-	socket.close()
+	logger.debug("stopping the thread")
+	isocket.close()
 	stoppedEvent.set()
 
 class Tcp:
@@ -132,6 +149,8 @@ class Tcp:
 		self._processReceivesLock.release()
 		return received
 
+mockLogger = logging.getLogger(__name__ + 'mocks')
+
 class MockSocket:
 
 	def __init__(self, recvs):
@@ -146,10 +165,22 @@ class MockSocket:
 
 
 	def send(self, bs):
+		mockLogger.debug("Mock socket sending something: '{0}'".format(bs))
 		self._sends.append(bs)
+		return len(bs)
 
 	def recv(self, i):
-		res = self._recvs.pop()
+		if len(self._recvs) == 0:
+			mockLogger.debug("MockSocket raising timeout")
+			raise socket.timeout
+
+		res = self._recvs.pop(0)
+
+		if res == None:
+			mockLogger.debug("MockSocket raising timeout")
+			raise socket.timeout
+
+		mockLogger.debug("Mocket socket recv'ing something: '{0}'".format(res))
 		return res
 
 	def close(self):
@@ -168,22 +199,36 @@ class MockQueue:
 		self._putsAllows = putsAllows
 
 	def get_nowait(self):
-		return self._gets.pop()
+		res = self._gets.pop(0)
+		if res == None:
+			mockLogger.debug('MockQueue raising Queue.Empty')
+			raise Queue.Empty
+		mockLogger.debug("MockQueue getting '{0}'".format(res))
+		return res
 
 	def put_nowait(self, received):
-		allow = self._putsAllows.pop()
+		allow = self._putsAllows.pop(0)
 		if allow:
+			mockLogger.debug("MockQueue putting: '{0}'".format(received))
 			self._puts.append(received)
 		else:
+			mockLogger.debug("MockQueue refusing to put, raising Queue.Full")
 			raise Queue.Full
 
 
 class TcpTests(unittest.TestCase):
 	def test_thread_read_1(self):
-		socketReceives = ['aoeu']
+		socketReceives = ['1234']
 		socket = MockSocket(socketReceives)
 
-		sendQueue = MockQueue([False, {'type': 'control', 'op': 'stop'}], None)
+		sendQueue = MockQueue(
+			[
+				None,  
+				{'type': 'message', 'contents': 'aoeu'},
+				None,
+				{'type': 'control', 'op': 'stop'}
+			], 
+			None)
 		receiveQueue = MockQueue(None, [True])
 		
 		stoppedEvent = threading.Event()
@@ -191,11 +236,14 @@ class TcpTests(unittest.TestCase):
 		socketThreadMain(socket, sendQueue, receiveQueue, stoppedEvent)
 
 		self.assertTrue(stoppedEvent.is_set())
+		self.assertEquals('1234', receiveQueue._puts.pop())
+		self.assertEquals(1, len(socket._sends))
 
 
 
 
 if __name__ == '__main__':
+	logging.basicConfig(level=logging.DEBUG)
 	unittest.main()
 
 
