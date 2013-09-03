@@ -27,7 +27,7 @@ class BCodeTransport(Transport):
 		self._sender = sendBytes
 
 	def receive_internal(self, data):
-		map(lambda f: f(data), this._callbacks)
+		map(lambda f: f(data), self._callbacks)
 
 	def send(self, data):
 		'''sends the data encoded'''

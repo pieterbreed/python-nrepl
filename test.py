@@ -4,12 +4,15 @@
 from bcode_transport import BCodeTransport
 from tcp import Tcp
 
-import argparse, sys, bcode, uuid, logging, time
+import argparse, sys, bcode, uuid, logging, time, threading
 
 logger = logging.getLogger(__name__)
 
+stopSignal = threading.Event()
+
 def callback(s):
 	logger.info("callback with data: '{0}'".format(s))
+	stopSignal.set()
 
 if __name__ == '__main__':
 	cliParser = argparse.ArgumentParser(description="Mucking around with nrepl")
@@ -30,7 +33,9 @@ if __name__ == '__main__':
 	tcp.start()
 	logger.debug('started the tcp')
 
-	time.sleep(1)
+	bcode.send({"op": "describe"})
+
+	stopSignal.wait()
 	logger.debug('slept')
 	tcp.stop()
 	logger.debug('stopped')

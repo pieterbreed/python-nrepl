@@ -156,7 +156,7 @@ class Tcp:
 		self._callbacks.append(callback)
 
 	def callback_internal(self, bytes):
-		map(lambda f: f(bytes), this._callbacks)
+		map(lambda f: f(bytes), self._callbacks)
 
 	def start(self):
 		'''starts the socket and threads'''
@@ -164,10 +164,12 @@ class Tcp:
 		self._socket.settimeout(0.5)
 		
 		self._socketThread = threading.Thread(target=socketThreadMain, args = (self._socket, self._socketSendQueue, self._socketReceiveQueue))
+		self._socketThread.daemon = True
 		self._socketThread.start();
 
 		self._callbackMustStopvent = threading.Event()
 		self._callbackThread = threading.Thread(target=callbackThreadMain, args = (self._socketReceiveQueue, self._callbackMustStopvent, self.callback_internal))
+		self._callbackThread.daemon = True
 		self._callbackThread.start();
 
 	def stop(self):
@@ -200,8 +202,8 @@ class Tcp:
 		
 		self._logger.debug('done stopping, all done.')
 
-	def send(self, data, session):
-		self._sessions.add(session)
+	def send(self, data, session=None):
+		# self._sessions.add(session)
 		self._socketSendQueue.put(
 			{
 				'type': 'message',
