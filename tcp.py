@@ -134,7 +134,7 @@ def socketThreadMain(isocket, sendQueue, receiveQueue):
 class Tcp:
 	'''provides an abstraction over a tcp/ip connection'''
 
-	def __init__(self, host, port, dataReceivedCallback):
+	def __init__(self, host, port, dataReceivedCallback=None):
 		'''creates a new TcpChannel which can send and receive data
 		to and from a tcp/ip socket.
 
@@ -145,14 +145,29 @@ class Tcp:
 		self._socketSendQueue = Queue.Queue()
 		self._socketReceiveQueue = Queue.Queue()
 
-		self._socket = socket.create_connection((host, port))
+		self._host = host
+		self._port = port
+
+		self._callbacks = []
+		if dataReceivedCallback != None:
+			self.add_callback(dataReceivedCallback)
+
+	def add_callback(self, callback):
+		self._callbacks.append(callback)
+
+	def callback_internal(self, bytes):
+		map(lambda f: f(bytes), this._callbacks)
+
+	def start(self):
+		'''starts the socket and threads'''
+		self._socket = socket.create_connection((self._host, self._port))
 		self._socket.settimeout(0.5)
 		
 		self._socketThread = threading.Thread(target=socketThreadMain, args = (self._socket, self._socketSendQueue, self._socketReceiveQueue))
 		self._socketThread.start();
 
 		self._callbackMustStopvent = threading.Event()
-		self._callbackThread = threading.Thread(target=callbackThreadMain, args = (self._socketReceiveQueue, self._callbackMustStopvent, dataReceivedCallback))
+		self._callbackThread = threading.Thread(target=callbackThreadMain, args = (self._socketReceiveQueue, self._callbackMustStopvent, self.callback_internal))
 		self._callbackThread.start();
 
 	def stop(self):
@@ -163,19 +178,25 @@ class Tcp:
 				'type': 'control', 
 				'op': 'stop'
 			})
-		if self._socketThread.isAlive():
-			self._logger.debug('waiting for the tcp thread to stop itself...')
-			self._socketThread.join()
-			self._logger.debug('tcp thread stopped :)')
-		else:
-			self._logger.warn('the socket thread was not alive anymore when the stop() method was called.')
+		try:
+			if self._socketThread.isAlive():
+				self._logger.debug('waiting for the tcp thread to stop itself...')
+				self._socketThread.join()
+				self._logger.debug('tcp thread stopped :)')
+			else:
+				self._logger.warn('the socket thread was not alive anymore when the stop() method was called.')
+		except:
+			self._logger.warn('it looks like the socket was never started')
 
-		if self._callbackThread.isAlive():
-			self._logger.debug('waiting for the callback thread to stop')
-			self._callbackMustStopvent.set()
-			self._callbackThread.join()
-		else:
-			self._logger.warn('the callback thread was not alive anymore when the stop() method was called')
+		try:
+			if self._callbackThread.isAlive():
+				self._logger.debug('waiting for the callback thread to stop')
+				self._callbackMustStopvent.set()
+				self._callbackThread.join()
+			else:
+				self._logger.warn('the callback thread was not alive anymore when the stop() method was called')
+		except:
+			self._logger.warn('it looks like the socket was never started')
 		
 		self._logger.debug('done stopping, all done.')
 
@@ -187,15 +208,6 @@ class Tcp:
 				'contents': data
 			})
 
-	def receive(self):
-		'''returns everything that has been received so far. This method is not thread-safe'''
-		received = ''
-		while not self._socketReceiveQueue.empty():
-			try:
-				received = received + self._socketReceiveQueue.qet_nowait()
-			except Queue.Empty:
-				pass
-		return received
 
 mockLogger = logging.getLogger(__name__ + 'mocks')
 

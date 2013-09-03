@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
 
-from asyncbcodedeserialiser import AsyncBCodeDeserialiser
+from bcode_transport import BCodeTransport
 from tcp import Tcp
 
 import argparse, sys, bcode, uuid, logging, time
@@ -21,8 +21,15 @@ if __name__ == '__main__':
 	effectiveLogLevel = getattr(logging, args.logLevel.upper(), None)
 	logging.basicConfig(level=effectiveLogLevel)
 
-	tcp = Tcp(args.hostname, args.port, callback)	
+
+	tcp = Tcp(args.hostname, args.port)
+	bcode = BCodeTransport(tcp.send, callback)
+	tcp.add_callback(bcode.receive)
 	logger.debug('created new tcp')
+
+	tcp.start()
+	logger.debug('started the tcp')
+
 	time.sleep(1)
 	logger.debug('slept')
 	tcp.stop()

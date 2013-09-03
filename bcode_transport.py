@@ -12,15 +12,22 @@ class BCodeTransport(Transport):
 	'''implements beencoding and bedecoding over channels that may
 	send partial section of each data structure'''
 
-	def __init__(self, sendBytes, receivedDataCb):
+	def __init__(self, sendBytes, receivedDataCb=None):
 		'''initialises the transport
 
 		sendBytes => method of one param, taking a byte[] which is used to send bytes
 		receivedDataCb => method of one param, taking any python data when data is received'''
 
+		self._callbacks = []
+		if receivedDataCb != None:
+			self._callbacks.append(receivedDataCb)
+
 		self._bcode = AsyncBCodeDeserialiser()
-		self._bcode.register_cb(receivedDataCb)
+		self._bcode.register_cb(self.receive_internal)
 		self._sender = sendBytes
+
+	def receive_internal(self, data):
+		map(lambda f: f(data), this._callbacks)
 
 	def send(self, data):
 		'''sends the data encoded'''
