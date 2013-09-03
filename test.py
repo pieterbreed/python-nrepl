@@ -8,6 +8,9 @@ import argparse, sys, bcode, uuid, logging, time
 
 logger = logging.getLogger(__name__)
 
+def callback(s):
+	logger.info("callback with data: '{0}'".format(s))
+
 if __name__ == '__main__':
 	cliParser = argparse.ArgumentParser(description="Mucking around with nrepl")
 	cliParser.add_argument("-ll", "--logLevel", help="The logging verbosity", default='DEBUG', choices=['DEBUG', 'WARNING', 'INFO', 'ERROR', 'CRITICAL'])
@@ -18,7 +21,7 @@ if __name__ == '__main__':
 	effectiveLogLevel = getattr(logging, args.logLevel.upper(), None)
 	logging.basicConfig(level=effectiveLogLevel)
 
-	tcp = Tcp(args.hostname, args.port)	
+	tcp = Tcp(args.hostname, args.port, callback)	
 	logger.debug('created new tcp')
 	time.sleep(1)
 	logger.debug('slept')

@@ -5,7 +5,37 @@ import unittest, threading, logging, Queue, socket
 TCP_CHANNEL_TIMEOUT = 1 # seconds, float value
 TCP_READ_BUFFER_SIZE = 4098
 
-def socketThreadMain(isocket, sendQueue, receiveQueue, stoppedEvent):
+def callbackThreadMain(receiveQueue, mustStopEvent, dataReceivedCallback):
+	'''this method is responsible for callbacks for data received from the socket.
+	It will read read data from receiveQueue and push it on via dataReceivedCallback(byte[])
+	It will check the value of mustStopEvent and exit once it is signalled
+
+	The onus is on dataReceivedCallback's implementation not to hang.
+	'''
+
+	logger = logging.getLogger(__name__ + 'callbackThreadMain')
+
+	while not mustStopEvent.wait(0.5):
+		logger.debug('iterating in callbackThreadMain')
+
+		if receiveQueue.empty():
+			logger.debug('receive queue is empty...')
+			continue
+
+		logger.debug('apparently, the receive queue is not empty')
+		received = ''
+		while not receiveQueue.empty():
+			try:
+				received = received + receiveQueue.get(False)
+			except Queue.Empty:
+				pass
+		logger.debug('calling the callback method with {0} bytes of data'.format(len(received)))
+		dataReceivedCallback(received)
+
+
+	logger.debug('stopping on callbackThreadMain')
+
+def socketThreadMain(isocket, sendQueue, receiveQueue):
 	'''this method will perform the communications with a socket-like object
 	and perform sending and receiving of data via the passed Queues.
 
@@ -29,8 +59,6 @@ def socketThreadMain(isocket, sendQueue, receiveQueue, stoppedEvent):
 	}
 
 	receiveQueue => a queue containing raw bytes/string read from the isocket
-
-	stoppedEvent => an Event that signals when the thread has terminated
 
 	'''
 
@@ -102,12 +130,11 @@ def socketThreadMain(isocket, sendQueue, receiveQueue, stoppedEvent):
 
 	logger.debug("stopping the thread")
 	isocket.close()
-	stoppedEvent.set()
 
 class Tcp:
 	'''provides an abstraction over a tcp/ip connection'''
 
-	def __init__(self, host, port):
+	def __init__(self, host, port, dataReceivedCallback):
 		'''creates a new TcpChannel which can send and receive data
 		to and from a tcp/ip socket.
 
@@ -117,11 +144,16 @@ class Tcp:
 		self._logger = logging.getLogger(__name__ + '.Tcp_logger')
 		self._socketSendQueue = Queue.Queue()
 		self._socketReceiveQueue = Queue.Queue()
-		self._stoppedEvent = threading.Event()
+
 		self._socket = socket.create_connection((host, port))
 		self._socket.settimeout(0.5)
-		self._thread = threading.Thread(target=socketThreadMain, args = (self._socket, self._socketSendQueue, self._socketReceiveQueue, self._stoppedEvent))
-		self._thread.start();
+		
+		self._socketThread = threading.Thread(target=socketThreadMain, args = (self._socket, self._socketSendQueue, self._socketReceiveQueue))
+		self._socketThread.start();
+
+		self._callbackMustStopvent = threading.Event()
+		self._callbackThread = threading.Thread(target=callbackThreadMain, args = (self._socketReceiveQueue, self._callbackMustStopvent, dataReceivedCallback))
+		self._callbackThread.start();
 
 	def stop(self):
 		'''stops the tcp thread and the socket and waits for it to clean itself up'''
@@ -131,12 +163,21 @@ class Tcp:
 				'type': 'control', 
 				'op': 'stop'
 			})
-		if self._thread.isAlive():
+		if self._socketThread.isAlive():
 			self._logger.debug('waiting for the tcp thread to stop itself...')
-			self._stoppedEvent.wait()
+			self._socketThread.join()
 			self._logger.debug('tcp thread stopped :)')
 		else:
 			self._logger.warn('the socket thread was not alive anymore when the stop() method was called.')
+
+		if self._callbackThread.isAlive():
+			self._logger.debug('waiting for the callback thread to stop')
+			self._callbackMustStopvent.set()
+			self._callbackThread.join()
+		else:
+			self._logger.warn('the callback thread was not alive anymore when the stop() method was called')
+		
+		self._logger.debug('done stopping, all done.')
 
 	def send(self, data, session):
 		self._sessions.add(session)
