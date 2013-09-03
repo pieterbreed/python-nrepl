@@ -39,10 +39,12 @@ def socketThreadMain(isocket, sendQueue, receiveQueue, stoppedEvent):
 	mustStop = False
 	received = ''
 	while not mustStop:
+		logger.debug('iterating in thread main method')
 
 		# sends everything that is in the send queue first
 		hasStuffToSend = True
 		while hasStuffToSend:
+			logger.debug('looking for something to send...')
 			try:
 				stuffToSend = sendQueue.get_nowait() # raises Queue.Empty if there is nothing to read
 				logger.debug("found an instruction on the sendQueue '{0}'".format(
@@ -70,6 +72,7 @@ def socketThreadMain(isocket, sendQueue, receiveQueue, stoppedEvent):
 		# lets try reading for a while
 		received = ''
 		if not mustStop:
+			logger.debug('looking to read something from the socket')
 			moreToRead = True
 			# try to read everything from the isocket
 			# that we can read now without waiting to long for
@@ -111,19 +114,29 @@ class Tcp:
 		host => the hostname or address to connect to
 		port => the port number to connect to on host'''
 
+		self._logger = logging.getLogger(__name__ + '.Tcp_logger')
 		self._socketSendQueue = Queue.Queue()
 		self._socketReceiveQueue = Queue.Queue()
-		self._stoppedEvent = thread.Event()
-		thread.start_new_thread(socketThreadMain, host, port, self._socketSendQueue, self._socketReceiveQueue, self._stoppedEvent)
+		self._stoppedEvent = threading.Event()
+		self._socket = socket.create_connection((host, port))
+		self._socket.settimeout(0.5)
+		self._thread = threading.Thread(target=socketThreadMain, args = (self._socket, self._socketSendQueue, self._socketReceiveQueue, self._stoppedEvent))
+		self._thread.start();
 
 	def stop(self):
 		'''stops the tcp thread and the socket and waits for it to clean itself up'''
+		self._logger.debug('stopping the Tcp')
 		self._socketSendQueue.put(
 			{
 				'type': 'control', 
 				'op': 'stop'
 			})
-		self._stoppedEvent.wait()
+		if self._thread.isAlive():
+			self._logger.debug('waiting for the tcp thread to stop itself...')
+			self._stoppedEvent.wait()
+			self._logger.debug('tcp thread stopped :)')
+		else:
+			self._logger.warn('the socket thread was not alive anymore when the stop() method was called.')
 
 	def send(self, data, session):
 		self._sessions.add(session)

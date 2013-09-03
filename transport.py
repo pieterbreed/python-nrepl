@@ -11,7 +11,7 @@ class Transport(object):
 		raise NotImplementedError()
 
 	def receive(self, raw):
-		'''accepts raw data from the channel. If onough data has been received
+		'''accepts raw data from the channel. If enough data has been received
 		that a complete python data structure can be assembled, the callback
 		will be invoked'''
 
