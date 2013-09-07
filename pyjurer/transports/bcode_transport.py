@@ -29,6 +29,9 @@ class BCodeTransport(Transport):
 	def receive_internal(self, data):
 		map(lambda f: f(data), self._callbacks)
 
+	def add_callback(self, receivedDataCb):
+		self._callbacks.append(receivedDataCb)
+
 	def send(self, data):
 		'''sends the data encoded'''
 

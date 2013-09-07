@@ -1,10 +1,9 @@
 #! /usr/bin/env python
 
 
-from bcode_transport import BCodeTransport
-from tcp import Tcp
+from session_container import *
 
-import argparse, sys, bcode, uuid, logging, time, threading
+import argparse, sys, uuid, logging, time, threading
 
 logger = logging.getLogger(__name__)
 
@@ -24,20 +23,12 @@ if __name__ == '__main__':
 	effectiveLogLevel = getattr(logging, args.logLevel.upper(), None)
 	logging.basicConfig(level=effectiveLogLevel)
 
-
-	tcp = Tcp(args.hostname, args.port)
-	bcode = BCodeTransport(tcp.send, callback)
-	tcp.add_callback(bcode.receive)
+	sessionContainer = create_bcode_over_tcp_session_container(args.hostname, args.port)
 	logger.debug('created new tcp')
 
-	tcp.start()
-	logger.debug('started the tcp')
-
-	bcode.send({"op": "describe"})
-
-	stopSignal.wait()
+	time.sleep(5)
 	logger.debug('slept')
-	tcp.stop()
+	stop_bcode_over_tcp_session_container(sessionContainer)
 	logger.debug('stopped')
 
 
