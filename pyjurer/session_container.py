@@ -1,7 +1,6 @@
 #! /usr/bin/env python
-# base interface for channel
 
-import socket, Queue
+import unittest
 
 class SessionContainer(object):
 	'''a nrepl-aware container for logic dealing with nrepl sessions.
@@ -20,10 +19,20 @@ class SessionContainer(object):
 		self._newSessionCallbacks = {}
 		self._sessions = {}
 
-	def createNewSession(self, newSessionCb):
+	def create_new_session(self, newSessionCb):
 		'''creates a new session and returns it with the callback method
 
-		newSessionCb => a function of 1 param taking an instance of NREPLSession'''
+		>>> import itertools
+		>>> idGenerator = (str(i) for i in itertools.count(1))
+		>>> def sender(data):
+		...    print data
+		>>> def new_session_cb():
+		...     pass
+		>>> session = SessionContainer(sender, idGenerator)
+		>>> session.create_new_session(new_session_cb)
+		{'id': '1', 'op': 'clone'}
+
+		'''
 
 		newSessionsId = self._idGen.next()
 		self._newSessionCallbacks[newSessionsId] = newSessionCb
@@ -88,4 +97,9 @@ class SessionContainer(object):
 			self._sessions[sessionId] = session
 
 		self._sender(data)
+
+
+if __name__ == "__main__":
+	import doctest
+	doctest.testmod()
 
