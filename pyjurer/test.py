@@ -25,8 +25,9 @@ if __name__ == '__main__':
 
 	sessionContainer = create_bcode_over_tcp_session_container(args.hostname, args.port)
 	logger.debug('created new tcp')
+	session = sessionContainer.create_new_session(callback)
 
-	time.sleep(5)
+	stopSignal.wait()
 	logger.debug('slept')
 	stop_bcode_over_tcp_session_container(sessionContainer)
 	logger.debug('stopped')

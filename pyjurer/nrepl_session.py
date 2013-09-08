@@ -3,7 +3,6 @@
 to the repl given an abstract idea of how to communicate 
 with such a NREPL"""
 
-from channel import Channel 
 import unittest, logging, itertools
 
 logger = logging.getLogger(__name__)
@@ -196,7 +195,7 @@ class NREPLSession:
 		self._channel.submit(data, self)
 
 
-class FakeListChannel(Channel):
+class FakeListChannel(object):
 	"""Channel that responds with a list of responses that are passed in as ctor arg"""
 
 	def __init__(self, responses):

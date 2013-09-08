@@ -4,6 +4,7 @@ import unittest, threading, itertools
 
 from channels.tcp import Tcp
 from transports.bcode_transport import BCodeTransport
+from nrepl_session import NREPLSession
 
 class SessionContainer(object):
 	'''a nrepl-aware container for logic dealing with nrepl sessions.
@@ -93,7 +94,7 @@ class SessionContainer(object):
 			if newSessionCallback is None:
 				raise KeyError("Unable to find an existing or new session corresponding with this data '{0}'".format(data))
 			else:
-				_handle_new_session_response(data, newSessionCallback)
+				self._handle_new_session_response(data, newSessionCallback)
 
 	def _submit(self, data):
 		"""Submits data to the channel. Called by the session.
