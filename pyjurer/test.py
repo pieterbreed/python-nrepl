@@ -9,9 +9,15 @@ logger = logging.getLogger(__name__)
 
 stopSignal = threading.Event()
 
-def callback(s):
-	logger.info("callback with data: '{0}'".format(s))
+def evalcb(res):
+	print "the answer is: {0}".format(res)
+	time.sleep(5)
 	stopSignal.set()
+
+def new_session_callback(s):
+	logger.debug('received data, the type is {0}'.format(s.__class__))
+	logger.info("callback with data: '{0}'".format(s))
+	s.eval("(println (+ 3 4))", evalcb)
 
 if __name__ == '__main__':
 	cliParser = argparse.ArgumentParser(description="Mucking around with nrepl")
@@ -25,7 +31,7 @@ if __name__ == '__main__':
 
 	sessionContainer = create_bcode_over_tcp_session_container(args.hostname, args.port)
 	logger.debug('created new tcp')
-	session = sessionContainer.create_new_session(callback)
+	session = sessionContainer.create_new_session(new_session_callback)
 
 	stopSignal.wait()
 	logger.debug('slept')

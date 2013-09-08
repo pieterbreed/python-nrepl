@@ -1,5 +1,11 @@
 # TODO
 
+## Immediate
+
+ - successfully responds to eval, but output is not being handled nicely.
+ - capture any output from any command via an overload or callback. figure out how
+   the end of a response is indicated and handle that properly.
+
 ## Next milestone: nrepl-cli
 
 **To create an `nrepl` client in python that does not rely on too many external libraries (or none at all if I can get away with it)**

@@ -85,7 +85,7 @@ class NREPLSession:
 				cb(receivedData['value'])
 
 		self._idBasedCallbacks[data["id"]] = interCb
-		self._channel.submit(data, self)
+		self._channel._submit(data)
 
 	def close(self, closeCb):
 		"""closes a session, calls closeCb when complete"""
@@ -97,7 +97,7 @@ class NREPLSession:
 		}
 
 		self._closeCb = closeCb
-		self._channel.submit(data, self)
+		self._channel._submit(data)
 
 	def describe(self, dataCb):
 		pass
@@ -128,7 +128,7 @@ class NREPLSession:
 
 		self._idBasedCallbacks[data["id"]] = dataCb
 
-		self._channel.submit(data, self)
+		self._channel._submit(data)
 
 	def clone(self, newSessionCb):
 		'''clones a session, calls newSessionCb with a new session instance'''
@@ -145,7 +145,7 @@ class NREPLSession:
 		logger.debug("received request to clone session '{0}'".format(self._sessionId))
 
 		self._idBasedCallbacks[data['id']] = dataReceivedCb
-		self._channel.submit(data, self)
+		self._channel._submit(data)
 
 	def loadFile(self, fileContents, loadFileCb, fileName=None, filePath=None):
 		'''loads the contents of a file into the session. optionally associates this
@@ -170,7 +170,7 @@ class NREPLSession:
 			loadFileCb()
 
 		self._idBasedCallbacks[data['id']] = dataReceivedCb
-		self._channel.submit(data, self)
+		self._channel._submit(data)
 
 	def loadStdIn(self, contents, needInputCb):
 		'''adds the contents of 'contents' to stdin on the nrepl session.
@@ -192,7 +192,7 @@ class NREPLSession:
 				needInputCb()
 
 		self._idBasedCallbacks[data['id']] = callback
-		self._channel.submit(data, self)
+		self._channel._submit(data)
 
 
 class FakeListChannel(object):
