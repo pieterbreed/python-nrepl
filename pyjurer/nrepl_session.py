@@ -3,7 +3,7 @@
 to the repl given an abstract idea of how to communicate 
 with such a NREPL"""
 
-import unittest, logging, itertools
+import unittest, logging, itertools, threading, collections
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,86 @@ InterruptStatus._dict = {
 			"interrupt-id-mismatch": InterruptStatus.INTERRUPT_ID_MISMATCH
 		}
 
+class _CallbackHandler:
+	'''in internal class for communicating callback handlers'''
+
+	def __init__(self, session):
+		self._registerDeque = collections.deque()
+		self._idCallbacks = {}
+		self._session = session
+
+	def register(self, item):
+		'''registers a bunch of callbacks associated with an id.
+
+		:param item: a map containing at least an 'id' which will be
+		corresponded with the 'id' in a nrepl result data structure. 
+		then also members called 'out' and 'value' which will be
+		invoked when that id receives either stdout or a value from
+		the nrepl
+		'''
+
+		# we are hooking in ourselves to the status
+		# of 'done' after which we take the id out
+		# but we have to make sure that if there is 
+		# a registered listener against 'done' that
+		# it will be invoked too.
+		closeCb = lambda s: self._done(s, item['id'])
+
+		if 'status' not in item:
+			item['status'] = {'done': closeCb}
+		elif 'done' not in item['status']:
+			item['status']['done'] = closeCb
+		else:
+			oldDone = item['status']['done']
+			def newDone(s):
+				oldDone(s)
+				closeCb(s)
+			item['status']['done'] = newDone
+
+		self._registerDeque.appendleft(item)
+
+	def _done(self, session, id_):
+		logger.debug('status is done for id {0}'.format(id_))
+		self._idCallbacks.pop(id_)
+
+	def _read_registerQueue(self):
+		'''reads out all callbacks sent from the invoking threading
+		before trying to handle any callbacks for results'''
+		while True:
+			try:
+				item = self._registerDeque.pop()
+				self._idCallbacks[item['id']] = item
+			except IndexError:
+				break
+
+	def accept_data(self, data):
+		self._read_registerQueue()
+
+		id_ = data['id']
+		if not id_ in self._idCallbacks:
+			raise IndexError('{0} not registered as a session id'.format(id_))
+
+		cbitem = self._idCallbacks[id_]
+		for op in cbitem.keys():
+			# 'id' and 'status' is special
+			# 'id' because it is a value and not a callback
+			# and 'status' because it's a list of callbacks
+			# instead of a single callback
+			if op == "id" or op == "status":
+				continue
+
+			# anything else is assumed to be a function
+			# that takes two values, the session
+			# and the value in the data dict
+			if op in data:
+				cbitem[op](self._session, data[op])
+
+		# the status callbacks only take the session
+		datastatus = data["status"] if "status" in data else []
+		for s in datastatus:
+			if s in cbitem['status']:
+				cbitem['status'][s](self._session)
+
 class NREPLSession:
 
 
@@ -38,36 +118,22 @@ class NREPLSession:
 		self._sessionId = sessionId
 		self._idGenerator = idGenerator
 
-		self._idBasedCallbacks = {}
 		self._closeCb = None
 		self._sessionClosing = False
 
-	
-	def resultsReceived(self, data):
+		self._callbacks = _CallbackHandler(self)
+
+	def _stdout(self, session, output):
+		logger.info('received stdout: {0}'.format(output))
+
+	def _receive_results(self, data):
 		"""Called by the channel when data is received that belongs to this session"""
 
 		logger.debug("Raw results: {0}".format(data))
-
-		status = data["status"] if "status" in data else []
-
-		if "id" in data:
-			dataId = data["id"]
-			cb = self._idBasedCallbacks[dataId] if dataId in self._idBasedCallbacks else None
-			if "done" in status:
-				self._idBasedCallbacks.pop(dataId)
-			if cb != None:
-				cb(data)
-
-		if "session-closed" in status:
-			logger.debug("Received session-closed status")
-			self._sessionClosing = True
-
-		if self._sessionClosing and len(self._idBasedCallbacks) == 0 and self._closeCb != None:
-			logger.debug("Calling close callback function")
-			self._closeCb()
+		self._callbacks.accept_data(data)
 
 	def eval(self, lispCode, cb):
-		"""evals lispcode in the nrepl, and calls cb with the result,
+		"""evals lispcode in the nrepl, and calls cb with the session and the result,
 		possibly many times"""
 
 		data = {
@@ -77,14 +143,15 @@ class NREPLSession:
 			"id": self._idGenerator.next()
 		}
 
+		callbackItem = {
+			'id': data['id'],
+			'value': cb,
+			'out': self._stdout
+		}
+
 		logger.debug("sending data structure to be evaled to channel: {0}".format(data))
 
-		def interCb(receivedData):
-			logger.debug("eval received response: {0}".format(receivedData))
-			if 'value' in receivedData:
-				cb(receivedData['value'])
-
-		self._idBasedCallbacks[data["id"]] = interCb
+		self._callbacks.register(callbackItem)
 		self._channel._submit(data)
 
 	def close(self, closeCb):
@@ -96,11 +163,30 @@ class NREPLSession:
 			"id": self._idGenerator.next()
 		}
 
-		self._closeCb = closeCb
+		callbackItem = {
+			'id': data['id'],
+			'out': self._stdout,
+			'status': {'session-closed': closeCb}
+		}
+
+		self._callbacks.register(callbackItem)
 		self._channel._submit(data)
 
 	def describe(self, dataCb):
-		pass
+		data = {
+			"op": "describe",
+			"session": self._sessionId,
+			"id": self._idGenerator.next()
+		}
+
+		callbackItem = {
+			'id': data['id'],
+			'out': self._stdout
+			#'status': {'session-closed': closeCb}
+		}
+
+		self._callbacks.register(callbackItem)
+		self._channel._submit(data)
 
 	def interrupt(self, statusCb, interrupt_id=None):
 		'''Interrupts a running request on the nrepl bound with the current session. Calls back 
@@ -209,7 +295,7 @@ class FakeListChannel(object):
 		nextData = self._responses.pop()
 		logger.debug("FaketListChannel: nextData = {0}".format(nextData))
 		for d in nextData:
-			session.resultsReceived(d)
+			session._receive_results(d)
 
 
 	def submit(self, data, session):

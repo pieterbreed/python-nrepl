@@ -81,7 +81,7 @@ class SessionContainer(object):
 		sessionId = data['session']
 
 		if self._sessions.has_key(sessionId):
-			self._sessions[sessionId].resultsReceived(data)
+			self._sessions[sessionId]._receive_results(data)
 		else:
 
 			newSessionCallback = None
