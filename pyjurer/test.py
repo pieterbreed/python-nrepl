@@ -9,12 +9,13 @@ logger = logging.getLogger(__name__)
 
 stopSignal = threading.Event()
 
-def closed(session):
+def closed(session, result):
+	print 'described as: {0}'.format(result)
 	stopSignal.set()
 
 def evalcb(session, res):
 	print "the answer is: {0}".format(res)
-	session.close(closed)
+	session.describe(closed)
 	# time.sleep(5)
 
 def new_session_callback(s):

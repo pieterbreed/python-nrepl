@@ -3,6 +3,8 @@
 to the repl given an abstract idea of how to communicate 
 with such a NREPL"""
 
+from __future__ import nested_scopes
+
 import unittest, logging, itertools, threading, collections
 
 logger = logging.getLogger(__name__)
@@ -179,10 +181,16 @@ class NREPLSession:
 			"id": self._idGenerator.next()
 		}
 
+		result = {}
+		def addData(k, v):
+			result[k] = v
+
 		callbackItem = {
 			'id': data['id'],
-			'out': self._stdout
-			#'status': {'session-closed': closeCb}
+			'out': self._stdout,
+			'versions': lambda s, v: addData('versions', v),
+			'ops': lambda s, v: addData('ops', v.keys()),
+			'status': {'done': lambda s: dataCb(s, result)}
 		}
 
 		self._callbacks.register(callbackItem)
