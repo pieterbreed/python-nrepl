@@ -134,8 +134,8 @@ class NREPLSession:
         logger.debug("Raw results: {0}".format(data))
         self._callbacks.accept_data(data)
 
-    def eval(self, lispCode, cb):
-        """evals lispcode in the nrepl, and calls cb with the session and the result,
+    def eval(self, lispCode, valueCb=None):
+        """evals lispcode in the nrepl, and calls valueCb with the session and the result,
         possibly many times"""
 
         data = {
@@ -147,7 +147,7 @@ class NREPLSession:
 
         callbackItem = {
             'id': data['id'],
-            'value': cb,
+            'value': valueCb,
             'out': self._stdout
         }
 

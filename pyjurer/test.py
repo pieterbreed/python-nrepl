@@ -9,8 +9,7 @@ logger = logging.getLogger(__name__)
 
 stopSignal = threading.Event()
 
-def closed(session, result):
-	print 'described as: {0}'.format(result)
+def closed(session):
 	stopSignal.set()
 
 def evalcb(session, res):
@@ -27,7 +26,8 @@ def loadFileCb(session, v):
 def new_session_callback(s):
 	logger.debug('received data, the type is {0}'.format(s.__class__))
 	logger.info("callback with data: '{0}'".format(s))
-	s.load_file("(+ 2 3)\r\n", valueCb=loadFileCb, fileName="heya.clj", filePath="c:\\temp", doneCb=loadFileIsDone)
+	s.eval('(read-line)', evalcb)
+	s.close(closed)
 
 
 if __name__ == '__main__':
