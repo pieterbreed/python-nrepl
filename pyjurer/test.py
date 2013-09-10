@@ -18,10 +18,17 @@ def evalcb(session, res):
 	session.describe(closed)
 	# time.sleep(5)
 
+def loadFileIsDone(session):
+	stopSignal.set()
+
+def loadFileCb(session, v):
+	print "loaded file... and it has value {0}".format(v)
+
 def new_session_callback(s):
 	logger.debug('received data, the type is {0}'.format(s.__class__))
 	logger.info("callback with data: '{0}'".format(s))
-	s.eval("(println (+ 3 4))", evalcb)
+	s.load_file("(+ 2 3)\r\n", valueCb=loadFileCb, fileName="heya.clj", filePath="c:\\temp", doneCb=loadFileIsDone)
+
 
 if __name__ == '__main__':
 	cliParser = argparse.ArgumentParser(description="Mucking around with nrepl")
