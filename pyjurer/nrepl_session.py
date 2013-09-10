@@ -110,7 +110,6 @@ class _CallbackHandler:
 
 class NREPLSession:
 
-
     def __init__(self, channel, sessionId, idGenerator):
         """channel => instance implementing Channel
         sessionId => a unique id associated with this session, probably assigned by the nrepl
