@@ -134,67 +134,97 @@ class NREPLSession:
         logger.debug("Raw results: {0}".format(data))
         self._callbacks.accept_data(data)
 
-    def eval(self, lispCode, valueCb=None):
-        """evals lispcode in the nrepl, and calls valueCb with the session and the result,
-        possibly many times"""
+    def _generic_command(
+        self, optype, 
+        extraRequest=None, 
+        extraResponse=None,
+        value=None, stdout=None, stdin=None, done=None, closed=None):
+        '''internal method for constructing a data structure to be sent to the nrepl'''
 
         data = {
-            "op": "eval",
+            "op": optype,
             "session": self._sessionId,
-            "code": lispCode,
             "id": self._idGenerator.next()
         }
 
+        if not extraRequest is None:
+            for k in extraRequest.keys():
+                data[k] = extraRequest[k]
+
         callbackItem = {
             'id': data['id'],
-            'value': valueCb,
-            'out': self._stdout
+            'status': {}
         }
 
-        logger.debug("sending data structure to be evaled to channel: {0}".format(data))
+        if not extraResponse is None:
+            for k in extraResponse.keys():
+                callbackItem[k] = extraResponse[k]
+
+        if not value is None:
+            callbackItem['value'] = value
+
+        if not stdout is None:
+            callbackItem['out'] = stdout
+
+        if not stdin is None:
+            callbackItem['status']['need-input'] = stdin
+
+        if not done is None:
+            callbackItem['status']['done'] = done
+
+        if not closed is None:
+            callbackItem['status']['session-closed'] = closed
+
+        logger.debug("sending data structure to channel: {0}".format(data))
 
         self._callbacks.register(callbackItem)
         self._channel._submit(data)
 
-    def close(self, closeCb):
-        """closes a session, calls closeCb when complete"""
+    def eval(self, lispCode, value=None, stdout=None, stdin=None, done=None):
+        """evals lispcode in the nrepl, and calls value callback with the session and the result
 
-        data = {
-            "op": "close",
-            "session": self._sessionId,
-            "id": self._idGenerator.next()
-        }
+        :param lispCode: the actual code that will be eval'd
+        :type lispCode: string
+        :param value: callback invoked with the session and with the value of the eval
+        :type value: function, taking two arguments, the first a session the second a python data structure
+        :param stdout: callback invoked with the stdout contents
+        :type stdout: function taking two parameters, the first is the session and the second is the string that makes up the stdout
+        :param stdin: callback invoked when content is required for stdin. With default value of None, the session will be notified that no more input from stdin is available
+        :type stdin: function, taking one parameter, the session
+        :param done: callback invoked when the session is finished processing this eval.
+        :type done: function, taking one argument, the session
 
-        callbackItem = {
-            'id': data['id'],
-            'out': self._stdout,
-            'status': {'session-closed': closeCb}
-        }
+        """
 
-        self._callbacks.register(callbackItem)
-        self._channel._submit(data)
+        self._generic_command(
+            "eval", 
+            extraRequest={"code": lispCode}, 
+            value=value, stdout=stdout, stdin=stdin, done=done)
 
-    def describe(self, dataCb):
-        data = {
-            "op": "describe",
-            "session": self._sessionId,
-            "id": self._idGenerator.next()
-        }
+    def close(self, closed=None):
+        """closes a session, calls closed when complete"""
+
+        self._generic_command(
+            "close", 
+            closed=closed)
+
+    def describe(self, described):
+        '''asks the nrepl to decribe itself, reporting version information and operational capability
+
+        :param described: function callback, taking the session and a python map containing keys for 'versions' and 'ops'
+        '''
 
         result = {}
         def addData(k, v):
             result[k] = v
 
-        callbackItem = {
-            'id': data['id'],
-            'out': self._stdout,
-            'versions': lambda s, v: addData('versions', v),
-            'ops': lambda s, v: addData('ops', v.keys()),
-            'status': {'done': lambda s: dataCb(s, result)}
-        }
-
-        self._callbacks.register(callbackItem)
-        self._channel._submit(data)
+        self._generic_command(
+            "describe", 
+            extraResponse={
+                'versions': lambda s, v: addData('versions', v),
+                'ops': lambda s, v: addData('ops', v.keys()),
+            },
+            done=lambda s: described(s, result))
 
     def interrupt(self, statusCb, interrupt_id=None):
         '''Interrupts a running request on the nrepl bound with the current session. Calls back 
@@ -241,7 +271,9 @@ class NREPLSession:
         self._idBasedCallbacks[data['id']] = dataReceivedCb
         self._channel._submit(data)
 
-    def load_file(self, fileContents, valueCb=None, doneCb=None, fileName=None, filePath=None):
+    def load_file(self, fileContents,
+        fileName=None, filePath=None,
+        value=None, stdout=None, stdin=None, done=None):
         '''loads the contents of a file into the session. optionally associates this
         with a name for the file and a relative path. Calls back with the value
 
@@ -256,57 +288,30 @@ class NREPLSession:
 
         '''
 
-        data = {
-            "op": "load-file",
-            "file": fileContents,
-            "session": self._sessionId,
-            "id": self._idGenerator.next()
+        extra = {
+            'file': fileContents
         }
 
         if fileName != None:
-            data['file-name'] = fileName
+            extra['file-name'] = fileName
 
         if filePath != None:
-            data['file-path'] = filePath
+            extra['file-path'] = filePath
 
-        logger.debug("request to load file '{0}'".format(data))
+        self._generic_command(
+            "load-file",
+            extraRequest=extra,
+            value=value, stdout=stdout, stdin=stdin, done=done):
 
-        callbackItem = {
-            'id': data['id'],
-            'out': self._stdout
-        }
-
-        if not doneCb is None:
-            callbackItem['status'] = {'done': doneCb}
-
-        if not valueCb is None:
-            callbackItem['value'] = valueCb
-
-        self._callbacks.register(callbackItem)
-        self._channel._submit(data)
-
-    def loadStdIn(self, contents, needInputCb):
+    def loadStdIn(self, contents, stdin=None, done=None):
         '''adds the contents of 'contents' to stdin on the nrepl session.
         needInputCb will be called if more data is required to satisfy a read
         operation on the session'''
 
-        data = {
-            "op": "stdin",
-            "stdin": contents,
-            "session": self._sessionId,
-            "id": self._idGenerator.next()
-        }
-
-        logger.debug("request to add contents to stdin")
-
-        def callback(data):
-            logger.debug("callback for stdin '{0}'".format(data))
-            if 'status' in data and 'need-input' in data['status']:
-                needInputCb()
-
-        self._idBasedCallbacks[data['id']] = callback
-        self._channel._submit(data)
-
+        self._generic_command(
+            "stdin", 
+            extraRequest={"stdin": contents},
+            stdin=stdin, done=done)
 
 class FakeListChannel(object):
     """Channel that responds with a list of responses that are passed in as ctor arg"""
