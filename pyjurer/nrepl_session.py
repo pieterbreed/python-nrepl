@@ -137,7 +137,9 @@ class NREPLSession:
         self, optype, 
         extraRequest=None, 
         extraResponse=None,
-        value=None, stdout=None, stdin=None, done=None, closed=None):
+        extraStatus=None,
+        value=None, stdout=None, stdin=None, 
+        done=None, closed=None):
         '''internal method for constructing a data structure to be sent to the nrepl'''
 
         data = {
@@ -174,10 +176,16 @@ class NREPLSession:
         if not closed is None:
             callbackItem['status']['session-closed'] = closed
 
+        if not extraStatus is None:
+            for s in extraStatus.keys():
+                callbackItem['status'][s] = extraStatus[s]
+
         logger.debug("sending data structure to channel: {0}".format(data))
 
         self._callbacks.register(callbackItem)
         self._channel._submit(data)
+
+        return data['id']
 
     def eval(self, lispCode, value=None, stdout=None, stdin=None, done=None):
         """evals lispcode in the nrepl, and calls value callback with the session and the result
@@ -195,7 +203,7 @@ class NREPLSession:
 
         """
 
-        self._generic_command(
+        return self._generic_command(
             "eval", 
             extraRequest={"code": lispCode}, 
             value=value, stdout=stdout, stdin=stdin, done=done)
@@ -203,7 +211,7 @@ class NREPLSession:
     def close(self, closed=None):
         """closes a session, calls closed when complete"""
 
-        self._generic_command(
+        return self._generic_command(
             "close", 
             closed=closed)
 
@@ -217,7 +225,7 @@ class NREPLSession:
         def addData(k, v):
             result[k] = v
 
-        self._generic_command(
+        return self._generic_command(
             "describe", 
             extraResponse={
                 'versions': lambda s, v: addData('versions', v),
@@ -225,33 +233,32 @@ class NREPLSession:
             },
             done=lambda s: described(s, result))
 
-    def interrupt(self, statusCb, interrupt_id=None):
-        '''Interrupts a running request on the nrepl bound with the current session. Calls back 
+    def interrupt(self, interrupt_id=None, result=None, done=None):
+        '''Interrupts a running request on the nrepl bound with the current session. Calls back on result
         with the result of the operation, which will be an int corresponding to one of the values in InterruptStatus
-        class.'''
+        class.
 
-        data = {
-            "op": "interrupt",
-            "session": self._sessionId,
-            "id": self._idGenerator.next()
-        }
+        :param interrupt_id: the id of the original request
+        :type interrupt_id: int
+        :param result: the callback, a function taking two arguments, the session and an INT defined in InterruptStatus
+        :type result: a function
+        :param done: a function, taking one argument, the session, when this command is completed
 
-        if interrupt_id != None:
-            data["interrupt-id"] = interrupt_id
+        '''
 
-        logger.debug("Sending interrupt {0}".format(data))
+        extraRequest = None
+        if not interrupt_id is None:
+        	extraRequest['interrupt-id'] = interrupt_id
 
-        def dataCb(rdata):
-            logger.debug("Received interrupt {0}".format(rdata))
-            for s in rdata['status']:
-                if InterruptStatus.has_string(s):
-                    statusCb(InterruptStatus.from_string(s))
-                    break
+        extraStatus = {}
+        for k in InterruptStatus._dict.keys():
+        	extraStatus[k] = lambda s: result(s, InterruptStatus.from_string(k))
 
-
-        self._idBasedCallbacks[data["id"]] = dataCb
-
-        self._channel._submit(data)
+        return _generic_command(
+	        self, "interrupt", 
+	        extraRequest=extraRequest,
+	        extraStatus=extraStatus
+	        done=None)
 
     def clone(self, newSessionCb):
         '''clones a session, calls newSessionCb with a new session instance'''
@@ -291,10 +298,10 @@ class NREPLSession:
             'file': fileContents
         }
 
-        if fileName != None:
+        if not fileName is None:
             extra['file-name'] = fileName
 
-        if filePath != None:
+        if not filePath is None:
             extra['file-path'] = filePath
 
         self._generic_command(
