@@ -51,7 +51,7 @@ class _CallbackHandler:
         # but we have to make sure that if there is 
         # a registered listener against 'done' that
         # it will be invoked too.
-        closeCb = lambda s: self._done(s, item['id'])
+        closeCb = lambda s, id_: self._done(s, id_)
 
         if 'status' not in item:
             item['status'] = {'done': closeCb}
@@ -59,9 +59,9 @@ class _CallbackHandler:
             item['status']['done'] = closeCb
         else:
             oldDone = item['status']['done']
-            def newDone(s):
-                oldDone(s)
-                closeCb(s)
+            def newDone(s, id_):
+                oldDone(s, id_)
+                closeCb(s, id_)
             item['status']['done'] = newDone
 
         self._registerDeque.appendleft(item)
@@ -97,16 +97,16 @@ class _CallbackHandler:
                 continue
 
             # anything else is assumed to be a function
-            # that takes two values, the session
+            # that takes three values, the session, the id 
             # and the value in the data dict
             if op in data:
-                cbitem[op](self._session, data[op])
+                cbitem[op](self._session, id_, data[op])
 
-        # the status callbacks only take the session
+        # the status callbacks only take the session and the id
         datastatus = data["status"] if "status" in data else []
         for s in datastatus:
             if s in cbitem['status']:
-                cbitem['status'][s](self._session)
+                cbitem['status'][s](self._session, id_)
 
 class NREPLSession:
 
@@ -257,11 +257,13 @@ class NREPLSession:
         return _generic_command(
 	        self, "interrupt", 
 	        extraRequest=extraRequest,
-	        extraStatus=extraStatus
+	        extraStatus=extraStatus,
 	        done=None)
 
     def clone(self, newSessionCb):
         '''clones a session, calls newSessionCb with a new session instance'''
+
+        raise NotImplemented('sorry, not implemented')
         data = {
             "op": "clone",
             "session": self._sessionId,
@@ -307,9 +309,9 @@ class NREPLSession:
         self._generic_command(
             "load-file",
             extraRequest=extra,
-            value=value, stdout=stdout, stdin=stdin, done=done):
+            value=value, stdout=stdout, stdin=stdin, done=done)
 
-    def loadStdIn(self, contents, stdin=None, done=None):
+    def stdin(self, contents, stdin=None, done=None):
         '''adds the contents of 'contents' to stdin on the nrepl session.
         needInputCb will be called if more data is required to satisfy a read
         operation on the session'''

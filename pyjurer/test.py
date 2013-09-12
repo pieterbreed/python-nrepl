@@ -9,25 +9,25 @@ logger = logging.getLogger(__name__)
 
 stopSignal = threading.Event()
 
-def closed(session):
-	stopSignal.set()
-
-def evalcb(session, res):
+def value(session, id_, res):
 	print "the answer is: {0}".format(res)
-	session.describe(closed)
 	# time.sleep(5)
 
-def loadFileIsDone(session):
-	stopSignal.set()
+def stdout(session, id_, out):
+	print ">>> {0}".format(out)
 
-def loadFileCb(session, v):
-	print "loaded file... and it has value {0}".format(v)
+def stdin(session, id_):
+	logger.debug('stdin called')
+	session.stdin('hey man\n')
+
+def done(session, id_):
+	stopSignal.set()
 
 def new_session_callback(s):
 	logger.debug('received data, the type is {0}'.format(s.__class__))
 	logger.info("callback with data: '{0}'".format(s))
-	s.eval('(read-line)', evalcb)
-	s.close(closed)
+	s.eval('(read-line)', value=value, stdout=value, stdin=stdin, done=done)
+	s.clone(None)
 
 
 if __name__ == '__main__':

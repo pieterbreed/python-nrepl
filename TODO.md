@@ -2,7 +2,7 @@
 
 ## Immediate
 
- - finish the other session commands: `stdin`, `ls-sessions`
+ - finish the other session commands: `ls-sessions`
  - capture any output from any command via an overload or callback. figure out how
    the end of a response is indicated and handle that properly.p6
 
@@ -25,6 +25,7 @@
       - `close`
       - `load-file`
       - `interrupt`
+      - `stdin`
 
 
 ## Feature list
