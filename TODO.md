@@ -2,9 +2,7 @@
 
 ## Immediate
 
- - finish the other session commands: `ls-sessions`
- - capture any output from any command via an overload or callback. figure out how
-   the end of a response is indicated and handle that properly.p6
+ - 
 
 ## Next milestone: nrepl-cli
 
@@ -15,9 +13,7 @@
 
 **done**
 
- - nice consistent callback api. All operations invoked on the session take both the 'value' (if appropriate) and a callback function with which the result or value of that
- operation will be invoked. The callback accepts both the sending session (object) and
- the primary value of that operation (a data structure of some kind as appropriate)
+ - nice consistent callback api. All operations invoked on the session take appropriately named callback functions. All callbacks that take a value will be invoked with three arguments, the session, the id that got the value and the actual value. All status callbacks (eg `done`) takes the session and the id.
  - these sessions commands are done:
 
       - `eval`
@@ -26,6 +22,7 @@
       - `load-file`
       - `interrupt`
       - `stdin`
+      - `ls-sessions`
 
 
 ## Feature list

@@ -28,85 +28,7 @@ InterruptStatus._dict = {
             "interrupt-id-mismatch": InterruptStatus.INTERRUPT_ID_MISMATCH
         }
 
-class _CallbackHandler:
-    '''in internal class for communicating callback handlers'''
 
-    def __init__(self, session):
-        self._registerDeque = collections.deque()
-        self._idCallbacks = {}
-        self._session = session
-
-    def register(self, item):
-        '''registers a bunch of callbacks associated with an id.
-
-        :param item: a map containing at least an 'id' which will be
-        corresponded with the 'id' in a nrepl result data structure. 
-        then also members called 'out' and 'value' which will be
-        invoked when that id receives either stdout or a value from
-        the nrepl
-        '''
-
-        # we are hooking in ourselves to the status
-        # of 'done' after which we take the id out
-        # but we have to make sure that if there is 
-        # a registered listener against 'done' that
-        # it will be invoked too.
-        closeCb = lambda s, id_: self._done(s, id_)
-
-        if 'status' not in item:
-            item['status'] = {'done': closeCb}
-        elif 'done' not in item['status']:
-            item['status']['done'] = closeCb
-        else:
-            oldDone = item['status']['done']
-            def newDone(s, id_):
-                oldDone(s, id_)
-                closeCb(s, id_)
-            item['status']['done'] = newDone
-
-        self._registerDeque.appendleft(item)
-
-    def _done(self, session, id_):
-        logger.debug('status is done for id {0}'.format(id_))
-        self._idCallbacks.pop(id_)
-
-    def _read_registerQueue(self):
-        '''reads out all callbacks sent from the invoking threading
-        before trying to handle any callbacks for results'''
-        while True:
-            try:
-                item = self._registerDeque.pop()
-                self._idCallbacks[item['id']] = item
-            except IndexError:
-                break
-
-    def accept_data(self, data):
-        self._read_registerQueue()
-
-        id_ = data['id']
-        if not id_ in self._idCallbacks:
-            raise IndexError('{0} not registered as a session id'.format(id_))
-
-        cbitem = self._idCallbacks[id_]
-        for op in cbitem.keys():
-            # 'id' and 'status' is special
-            # 'id' because it is a value and not a callback
-            # and 'status' because it's a list of callbacks
-            # instead of a single callback
-            if op == "id" or op == "status":
-                continue
-
-            # anything else is assumed to be a function
-            # that takes three values, the session, the id 
-            # and the value in the data dict
-            if op in data:
-                cbitem[op](self._session, id_, data[op])
-
-        # the status callbacks only take the session and the id
-        datastatus = data["status"] if "status" in data else []
-        for s in datastatus:
-            if s in cbitem['status']:
-                cbitem['status'][s](self._session, id_)
 
 class NREPLSession:
 
@@ -320,6 +242,14 @@ class NREPLSession:
             "stdin", 
             extraRequest={"stdin": contents},
             stdin=stdin, done=done)
+
+    def ls_sessions(self, sessions=None, done=None):
+    	'''lists all the sessions on the nrepl'''
+
+    	self._generic_command(
+    		"ls-sessions",
+    		extraResponse={'sessions': sessions},
+    		done=done)
 
 class FakeListChannel(object):
     """Channel that responds with a list of responses that are passed in as ctor arg"""

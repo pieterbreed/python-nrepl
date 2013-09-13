@@ -5,6 +5,7 @@ import unittest, threading, itertools
 from channels.tcp import Tcp
 from transports.bcode_transport import BCodeTransport
 from nrepl_session import NREPLSession
+from callback_handler import _CallbackHandler
 
 class SessionContainer(object):
 	'''a nrepl-aware container for logic dealing with nrepl sessions.
@@ -22,6 +23,15 @@ class SessionContainer(object):
 		self._newSessionLock = threading.Lock()
 		self._newSessionCallbacks = {}
 		self._sessions = {}
+		self._callbackHandler = _CallbackHandler(self._create_session_from_id)
+		self._isStarting = True
+		self._startingRequestId = self._idGen.next()
+		self._sender({'id': self._startingRequestId, 'op': 'describe'})
+
+	def _create_session_from_id(self, session_id):
+		if not session_id in self._sessions:
+			self._sessions[session_id] = NREPLSession(self, session_id, self._idGen)
+		return self._sessions[session_id]
 
 	def create_new_session(self, newSessionCb):
 		'''creates a new session and returns it once it is created with the callback method
@@ -70,6 +80,9 @@ class SessionContainer(object):
 		'''called by the channel when data is received 
 
 		data => python data structure'''
+
+		# if self._isStarting:
+
 
 		if not 'id' in data:
 			raise ValueError('data does not contain an "id" field')
@@ -148,7 +161,4 @@ def create_bcode_over_tcp_session_container(host, port):
 	return sessionContainer
 
 
-if __name__ == "__main__":
-	import doctest
-	doctest.testmod()
 
