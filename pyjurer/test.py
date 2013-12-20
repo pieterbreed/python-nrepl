@@ -58,7 +58,7 @@ if __name__ == '__main__':
 
 	cb = _CallbackHandler(sessionFactory, initialCallback)
 
-	tcp = Tcp('localhost', 58791)
+	tcp = Tcp(args.hostname, args.port)
 	bcode = BCodeTransport(tcp.send)
 	tcp.add_callback(bcode.receive)
 	bcode.send({'op': 'describe', 'id':1})

@@ -13,7 +13,7 @@ class SessionContainer(object):
 	this presents a callback-based api for interacting with nrepl'''
 
 	def __init__(self, sender, idGenerator):
-		'''creates a session container
+		'''creates a session container 
 
 		sender => a function of one param that accepts python data for sending via the transport
 		idGenerator => an iterator that creates unique strings used for identifying nrepl instructions'''
@@ -23,10 +23,14 @@ class SessionContainer(object):
 		self._newSessionLock = threading.Lock()
 		self._newSessionCallbacks = {}
 		self._sessions = {}
-		self._callbackHandler = _CallbackHandler(self._create_session_from_id)
+		self._callbackHandler = _CallbackHandler(self._create_session_from_id, self._implicit_session_catcher)
 		self._isStarting = True
 		self._startingRequestId = self._idGen.next()
 		self._sender({'id': self._startingRequestId, 'op': 'describe'})
+
+	def _implicit_session_catcher(self, session, data):
+		self._implicit_session = session
+		return
 
 	def _create_session_from_id(self, session_id):
 		if not session_id in self._sessions:
