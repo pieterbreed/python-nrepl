@@ -43,8 +43,8 @@ def destroy_repl(repl):
 @given('a headless nrepl has been started on localhost')
 def step_impl(context):
     pass
-    
-@when('a connection is created')
+
+@when('a connection is opened to \'nrepl://localhost:port/\'')
 def step_impl(context):
     assert False
 
