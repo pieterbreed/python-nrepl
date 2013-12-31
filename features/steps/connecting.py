@@ -1,4 +1,4 @@
-import logging, subprocess, re, sys, signal, os
+import logging, subprocess, re, sys, signal, os, threading
 from behave import given, when, then, step
 from pyjurer.session_container import connect_nrepl, SessionContainer
 
@@ -49,10 +49,23 @@ def destroy_repl(repl):
 def step_impl(context):
     pass
 
-@when('a connection is opened to \'nrepl://localhost:port/\'')
+@step('a connection is opened to \'nrepl://localhost:port/\'')
 def step_impl(context):
     connection = connect_nrepl('nrepl://{0}:{1}'.format('localhost', context.lein_repl['port']))
     context.connection = connection
+
+@step('a new session is requested')
+def step_impl(context):
+    assert hasattr(context, 'connection')
+    connection = context.connection
+    mayContinue = threading.Event()
+
+    def new_session_cb(session):
+        context.session = session
+        mayContinue.set()
+
+    connection.create_new_session(new_session_cb)
+    assert mayContinue.wait(timeout=2)
 
 @then('a \'{0}\' is returned in \'{1}\'')
 def step_impl(context, t, n):

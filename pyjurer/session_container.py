@@ -56,7 +56,7 @@ class SessionContainer(object):
 
 		'''
 
-		newSessionsId = self._idGen.next()
+		newSessionsId = next(self._idGen)
 
 		self._newSessionLock.acquire();
 		self._newSessionCallbacks[newSessionsId] = newSessionCb
@@ -79,7 +79,6 @@ class SessionContainer(object):
 		newSession = NREPLSession(self, newSessionId, self._idGen)
 		self._sessions[newSessionId] = newSession
 		callback(newSession)
-
 
 	def _accept_data(self, data):
 		'''called by the channel when data is received 

@@ -106,7 +106,7 @@ def socketThreadMain(isocket, sendQueue, receiveQueue):
 			# that we can read now without waiting to long for
 			while moreToRead:
 				try:
-					received = received + isocket.recv(TCP_READ_BUFFER_SIZE)
+					received = received + isocket.recv(TCP_READ_BUFFER_SIZE).decode('UTF-8')
 					logger.debug("Have something from the socket: '{0}'".format(
 						received))
 				except socket.timeout:
