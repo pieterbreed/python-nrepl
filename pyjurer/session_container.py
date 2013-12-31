@@ -1,11 +1,12 @@
 #! /usr/bin/env python
 
-import unittest, threading, itertools
+import unittest, threading, itertools, logging
+from urllib.parse import urlparse
 
-from channels.tcp import Tcp
-from transports.bcode_transport import BCodeTransport
-from nrepl_session import NREPLSession
-from callback_handler import _CallbackHandler
+from pyjurer.channels.tcp import Tcp
+from pyjurer.transports.bcode_transport import BCodeTransport
+from pyjurer.nrepl_session import NREPLSession
+from pyjurer.callback_handler import _CallbackHandler
 
 class SessionContainer(object):
 	'''a nrepl-aware container for logic dealing with nrepl sessions.
@@ -25,7 +26,7 @@ class SessionContainer(object):
 		self._sessions = {}
 		self._callbackHandler = _CallbackHandler(self._create_session_from_id, self._implicit_session_catcher)
 		self._isStarting = True
-		self._startingRequestId = self._idGen.next()
+		self._startingRequestId = next(self._idGen)
 		self._sender({'id': self._startingRequestId, 'op': 'describe'})
 
 	def _implicit_session_catcher(self, session, data):
@@ -163,6 +164,37 @@ def create_bcode_over_tcp_session_container(host, port):
 	tcp_sessions[sessionContainer] = tcp
 
 	return sessionContainer
+
+class PythonNreplError(Exception):
+    """Base class for exceptions in this module."""
+    pass
+
+class ConnectionError(PythonNreplError):
+    """Exception raised for matters related to the connection
+
+    Attributes:
+        message -- explanation of the error
+    """
+
+    def __init__(self, message):
+        self.message = message
+
+def connect_nrepl(url):
+	'''connects to an nrepl using the url notation
+
+	eg: nrepl://localhost:34567'''
+	pieces = urlparse(url)
+	scheme = pieces.scheme
+
+	schemeHandlers = {
+		'nrepl': lambda u: create_bcode_over_tcp_session_container(pieces.hostname, pieces.port)
+	}
+
+	if scheme in schemeHandlers:
+		return schemeHandlers[scheme](url)
+	else:
+		raise ConnectionError("Invalid scheme in URI. (given: {0})".format(url))
+
 
 
 

@@ -3,10 +3,12 @@
 
 '''implements an NREPL transport using beencoding'''
 
-from async_bcode_deserialiser import AsyncBCodeDeserialiser
-from transport import Transport
+from pyjurer.transports.async_bcode_deserialiser import AsyncBCodeDeserialiser
+from pyjurer.transports.transport import Transport
 
-import bcode, unittest, logging
+from pyjurer.transports.bcode import bencode
+
+import unittest, logging
 
 class BCodeTransport(Transport):
 	'''implements beencoding and bedecoding over channels that may
@@ -35,7 +37,7 @@ class BCodeTransport(Transport):
 	def send(self, data):
 		'''sends the data encoded'''
 
-		self._sender(bcode.bencode(data))
+		self._sender(bencode(data))
 
 	def receive(self, raw):
 		'''accepts raw data and determines when to invoke the callback when

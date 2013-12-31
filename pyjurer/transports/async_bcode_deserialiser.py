@@ -3,7 +3,7 @@
 '''class to interpret unknown lengths of bencoded strings
 keeps remnants around until more data is received'''
 
-import bcode
+from pyjurer.transports.bcode import bdecode
 import unittest
 
 class AsyncBCodeDeserialiser:
@@ -29,7 +29,7 @@ class AsyncBCodeDeserialiser:
     def _perform_data_stitching(this):
         while len(this._buffer) > 0:
             try:
-                temp = bcode.bdecode(this._buffer)
+                temp = bdecode(this._buffer)
             except ValueError:
                 temp = None
 

@@ -1,6 +1,6 @@
 # /usr/bin/env python
 
-import unittest, threading, logging, Queue, socket
+import unittest, threading, logging, queue, socket
 
 TCP_CHANNEL_TIMEOUT = 1 # seconds, float value
 TCP_READ_BUFFER_SIZE = 4098
@@ -27,7 +27,7 @@ def callbackThreadMain(receiveQueue, mustStopEvent, dataReceivedCallback):
 		while not receiveQueue.empty():
 			try:
 				received = received + receiveQueue.get(False)
-			except Queue.Empty:
+			except queue.Empty:
 				pass
 		logger.debug('calling the callback method with {0} bytes of data'.format(len(received)))
 		dataReceivedCallback(received)
@@ -74,7 +74,7 @@ def socketThreadMain(isocket, sendQueue, receiveQueue):
 		while hasStuffToSend:
 			logger.debug('looking for something to send...')
 			try:
-				stuffToSend = sendQueue.get_nowait() # raises Queue.Empty if there is nothing to read
+				stuffToSend = sendQueue.get_nowait() # raises queue.Empty if there is nothing to read
 				logger.debug("found an instruction on the sendQueue '{0}'".format(
 					stuffToSend))
 
@@ -89,9 +89,9 @@ def socketThreadMain(isocket, sendQueue, receiveQueue):
 						"Received something to send on the socket: '{0}'".format(
 							messageContents))
 					while len(messageContents) > 0:
-						sent = isocket.send(messageContents)
+						sent = isocket.send(bytes(messageContents, 'UTF-8'))
 						messageContents = messageContents[sent:]
-			except Queue.Empty, e:
+			except queue.Empty as e:
 				logger.debug("nothing to send atm")
 				hasStuffToSend = False
 
@@ -121,7 +121,7 @@ def socketThreadMain(isocket, sendQueue, receiveQueue):
 			try:
 				receiveQueue.put_nowait(received)
 				received = ''
-			except Queue.Full:
+			except queue.Full:
 				# we can't send it back right now because the queue is full
 				# we're not doing anything with this
 				# since we can just put it next time round
@@ -142,8 +142,8 @@ class Tcp:
 		port => the port number to connect to on host'''
 
 		self._logger = logging.getLogger(__name__ + '.Tcp_logger')
-		self._socketSendQueue = Queue.Queue()
-		self._socketReceiveQueue = Queue.Queue()
+		self._socketSendQueue = queue.Queue()
+		self._socketReceiveQueue = queue.Queue()
 
 		self._host = host
 		self._port = port
@@ -217,10 +217,10 @@ class MockSocket:
 
 	def __init__(self, recvs):
 		'''recvs => list of items. items must be either strings or the value True.
-		When True is read, a Queue.Empty will be raised
+		When True is read, a queue.Empty will be raised
 
 		sends => similarly a list of items. items must be strings or the Value True.
-		When True is encountered, a Queue.Empty is raised'''
+		When True is encountered, a queue.Empty is raised'''
 		self._recvs = recvs
 		self._sends = []
 		self._closeCalled = False
@@ -252,10 +252,10 @@ class MockQueue:
 
 	def __init__(self, gets, putsAllows):
 		'''gets => a list of things that will be read. Must be either a None or 
-		python item. For every None a Queue.Empty will be raised
+		python item. For every None a queue.Empty will be raised
 
 		putsAllows => an item corresponding to every puts invocation. True
-		accepts the put and False raises an Queue.Full'''
+		accepts the put and False raises an queue.Full'''
 		self._gets = gets
 		self._puts = []
 		self._putsAllows = putsAllows
@@ -263,8 +263,8 @@ class MockQueue:
 	def get_nowait(self):
 		res = self._gets.pop(0)
 		if res == None:
-			mockLogger.debug('MockQueue raising Queue.Empty')
-			raise Queue.Empty
+			mockLogger.debug('MockQueue raising queue.Empty')
+			raise queue.Empty
 		mockLogger.debug("MockQueue getting '{0}'".format(res))
 		return res
 
@@ -274,8 +274,8 @@ class MockQueue:
 			mockLogger.debug("MockQueue putting: '{0}'".format(received))
 			self._puts.append(received)
 		else:
-			mockLogger.debug("MockQueue refusing to put, raising Queue.Full")
-			raise Queue.Full
+			mockLogger.debug("MockQueue refusing to put, raising queue.Full")
+			raise queue.Full
 
 
 class TcpTests(unittest.TestCase):

@@ -1,6 +1,6 @@
 import logging, subprocess, re, sys, signal, os
 from behave import given, when, then, step
-from 
+from pyjurer.session_container import connect_nrepl, SessionContainer
 
 # these tests might not work on windows
 # on mac os x the subprocess starts lein
@@ -29,17 +29,21 @@ def create_headless_repl():
         
         m = re.search("nREPL server started on port (\d+) on host localhost", firstlineTxt)
 
-        port = int(m.groups()[0])
-        logging.debug("started an nrepl on port {0} with pid {1}".format(port, lein_process.pid))
-        return (lein_process, port)
+        p = int(m.groups()[0])
+        logging.debug("started an nrepl on port {0} with pid {1}".format(p, lein_process.pid))
+        return {
+            'process': lein_process, 
+            'port': p,
+            'pid': lein_process.pid
+        }
     except TypeError: ## happens when the readline doesn't work
         destroy_repl((lein_process, -1))
         raise
 
 def destroy_repl(repl):
-    logging.debug("Terminating lein on port {0}".format(repl[1]))
-    os.killpg(repl[0].pid, signal.SIGTERM) 
-    repl[0].wait()
+    logging.debug("Terminating lein on port {0}".format(repl['port']))
+    os.killpg(repl['pid'], signal.SIGTERM) 
+    repl['process'].wait()
 
 @given('a headless nrepl has been started on localhost')
 def step_impl(context):
@@ -47,11 +51,13 @@ def step_impl(context):
 
 @when('a connection is opened to \'nrepl://localhost:port/\'')
 def step_impl(context):
-    assert False
+    connection = connect_nrepl('nrepl://{0}:{1}'.format('localhost', context.lein_repl['port']))
+    context.connection = connection
 
-@then('a replmanager is returned')
-def step_impl(context):
-    assert False
+@then('a \'{0}\' is returned in \'{1}\'')
+def step_impl(context, t, n):
+    assert hasattr(context, n)
+    assert getattr(context, n).__class__.__name__ == t
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG)

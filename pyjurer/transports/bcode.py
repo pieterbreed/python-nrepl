@@ -8,7 +8,7 @@ from warnings import warn
 
 def _encode_dictionary(input):
     result = str()
-    for key, value in input.iteritems():
+    for key, value in input.items():
         result += bencode(key)+bencode(value)
     return 'd%se' % result
 
@@ -22,8 +22,6 @@ def _encode_iterable(input):
     return 'l%se' % result
 
 def _encode_string(input):
-    if type(input) is unicode:
-        input = input.encode('utf8')
     return '%d:%s' % (len(input),input)
 
 
@@ -132,8 +130,8 @@ def bencode(input):
     
     itype = type(input)
     
-    if itype == type(str()) or itype == type(unicode()):
-        return _encode_string(input.encode('utf8'))
+    if itype == type(str()):
+        return _encode_string(input)
     
     elif itype == type(float()):
         return _encode_string(str(input))
